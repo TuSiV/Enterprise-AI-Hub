@@ -54,7 +54,9 @@ impl CircuitBreakerRegistry {
             State::Closed => BreakerDecision::Allow,
             State::Open { opened_at } => {
                 if opened_at.elapsed() >= OPEN_DURATION {
-                    breaker.state = State::HalfOpen { probe_in_flight: true };
+                    breaker.state = State::HalfOpen {
+                        probe_in_flight: true,
+                    };
                     BreakerDecision::Allow
                 } else {
                     BreakerDecision::Open
@@ -64,7 +66,9 @@ impl CircuitBreakerRegistry {
                 if probe_in_flight {
                     BreakerDecision::Open
                 } else {
-                    breaker.state = State::HalfOpen { probe_in_flight: true };
+                    breaker.state = State::HalfOpen {
+                        probe_in_flight: true,
+                    };
                     BreakerDecision::Allow
                 }
             }
@@ -101,7 +105,12 @@ impl CircuitBreakerRegistry {
                     State::Open { .. } => "open".to_string(),
                     State::HalfOpen { .. } => "half_open".to_string(),
                 };
-                (provider.clone(), model.clone(), state, breaker.consecutive_failures)
+                (
+                    provider.clone(),
+                    model.clone(),
+                    state,
+                    breaker.consecutive_failures,
+                )
             })
             .collect()
     }

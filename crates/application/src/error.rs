@@ -47,12 +47,18 @@ impl GatewayCode {
 
     pub fn http_status(&self) -> u16 {
         match self {
-            GatewayCode::InvalidRequest | GatewayCode::ContextTooLong | GatewayCode::ContentFiltered => 400,
+            GatewayCode::InvalidRequest
+            | GatewayCode::ContextTooLong
+            | GatewayCode::ContentFiltered => 400,
             GatewayCode::Unauthorized => 401,
             GatewayCode::Forbidden | GatewayCode::ModelNotAllowed => 403,
             GatewayCode::ModelNotFound | GatewayCode::RouteNotFound => 404,
-            GatewayCode::RateLimited | GatewayCode::QuotaExceeded | GatewayCode::ProviderRateLimited => 429,
-            GatewayCode::ProviderUnavailable | GatewayCode::ProviderAuthFailed | GatewayCode::ProviderError => 502,
+            GatewayCode::RateLimited
+            | GatewayCode::QuotaExceeded
+            | GatewayCode::ProviderRateLimited => 429,
+            GatewayCode::ProviderUnavailable
+            | GatewayCode::ProviderAuthFailed
+            | GatewayCode::ProviderError => 502,
             GatewayCode::ProviderTimeout => 504,
             GatewayCode::StreamInterrupted => 502,
         }

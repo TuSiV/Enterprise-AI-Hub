@@ -36,17 +36,18 @@ fn main() {
             .expect("load config");
         let (addr, port) = aihub_server::bind(&config).await.expect("bind gateway");
         config.gateway.port = port;
-        let core = aihub_server::bootstrap(config).await.expect("bootstrap core");
+        let core = aihub_server::bootstrap(config)
+            .await
+            .expect("bootstrap core");
         let endpoint = format!("http://{}", addr);
         let (shutdown_tx, mut shutdown_rx) = tokio::sync::watch::channel(false);
         let server_router = core.router.clone();
         // axum Server 运行在后台，随 shutdown 信号退出
         tokio::spawn(async move {
             let listener = tokio::net::TcpListener::bind(addr).await.expect("listen");
-            let server = axum::serve(listener, server_router)
-                .with_graceful_shutdown(async move {
-                    let _ = shutdown_rx.changed().await;
-                });
+            let server = axum::serve(listener, server_router).with_graceful_shutdown(async move {
+                let _ = shutdown_rx.changed().await;
+            });
             let _ = server.await;
         });
         let handle = CoreHandle {
@@ -61,10 +62,14 @@ fn main() {
         .manage(handle)
         .setup(move |app| {
             let url: tauri::Url = endpoint.parse().expect("valid url");
-            let window = tauri::webview::WebviewWindowBuilder::new(app, "main", tauri::WebviewUrl::External(url))
-                .title("Enterprise AI Hub")
-                .inner_size(1280.0, 820.0)
-                .build()?;
+            let window = tauri::webview::WebviewWindowBuilder::new(
+                app,
+                "main",
+                tauri::WebviewUrl::External(url),
+            )
+            .title("Enterprise AI Hub")
+            .inner_size(1280.0, 820.0)
+            .build()?;
             let _ = window;
             Ok(())
         })

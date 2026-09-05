@@ -57,7 +57,9 @@ async fn main() -> anyhow::Result<()> {
             let mut interval = tokio::time::interval(std::time::Duration::from_secs(60));
             loop {
                 interval.tick().await;
-                let Ok(list) = providers.list().await else { continue };
+                let Ok(list) = providers.list().await else {
+                    continue;
+                };
                 for provider in list {
                     if provider.enabled {
                         let _ = providers.test(&provider.id).await;

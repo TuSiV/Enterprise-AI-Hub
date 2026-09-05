@@ -70,7 +70,9 @@ impl Provider {
     /// OpenAI / Ollama / openai_compatible 全部复用 OpenAI-compatible Adapter。
     pub fn adapter_protocol(&self) -> &'static str {
         match self.kind {
-            ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => "openai_compatible",
+            ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => {
+                "openai_compatible"
+            }
             ProviderKind::Anthropic => "anthropic",
             ProviderKind::Gemini => "gemini",
         }

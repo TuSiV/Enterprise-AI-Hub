@@ -2,7 +2,7 @@
 //! 预置只是初始模板，管理员可随时重新映射（§16.3）。
 
 use aihub_domain::entities::RoutingStrategy;
-use aihub_domain::repos::{ApplicationRepository, NewApplication, NewVirtualModel, VirtualModelRepository};
+use aihub_domain::repos::{NewApplication, NewVirtualModel};
 use serde_json::json;
 
 use crate::Repos;
@@ -42,7 +42,12 @@ pub async fn seed_defaults(repos: &Repos) {
         }
     }
 
-    if repos.applications.get_by_key(PLAYGROUND_APPLICATION).await.is_err() {
+    if repos
+        .applications
+        .get_by_key(PLAYGROUND_APPLICATION)
+        .await
+        .is_err()
+    {
         match repos
             .applications
             .create(NewApplication {
@@ -56,8 +61,12 @@ pub async fn seed_defaults(repos: &Repos) {
             })
             .await
         {
-            Ok(_) => tracing::info!(target: "aihub::seed", key = PLAYGROUND_APPLICATION, "seeded playground application"),
-            Err(e) => tracing::warn!(target: "aihub::seed", error = %e, "failed to seed playground application"),
+            Ok(_) => {
+                tracing::info!(target: "aihub::seed", key = PLAYGROUND_APPLICATION, "seeded playground application")
+            }
+            Err(e) => {
+                tracing::warn!(target: "aihub::seed", error = %e, "failed to seed playground application")
+            }
         }
     }
 }

@@ -5,9 +5,9 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::sync::RwLock;
 
+use aihub_domain::entities::Provider;
 use aihub_domain::error::{DomainError, DomainResource};
 use aihub_domain::repos::ProviderRepository;
-use aihub_domain::entities::Provider;
 use aihub_provider_core::{ProviderError, ProviderFactory, ProviderRuntimeConfig};
 use aihub_secrets::{SecretRef, SecretStore};
 
@@ -43,7 +43,10 @@ impl ProviderRegistry {
         self.factories.iter().map(|f| f.protocol()).collect()
     }
 
-    async fn resolve_credential(&self, provider: &Provider) -> Result<Option<aihub_secrets::SecretValue>, ProviderError> {
+    async fn resolve_credential(
+        &self,
+        provider: &Provider,
+    ) -> Result<Option<aihub_secrets::SecretValue>, ProviderError> {
         let Some(credential_ref) = &provider.credential_ref else {
             return Ok(None);
         };
@@ -94,11 +97,17 @@ impl ProviderRegistry {
             })?;
 
         let credential = self.resolve_credential(provider).await.map_err(|e| {
-            DomainError::internal(DomainResource::Provider, format!("secret resolution failed: {e}"))
+            DomainError::internal(
+                DomainResource::Provider,
+                format!("secret resolution failed: {e}"),
+            )
         })?;
         let runtime_config = ProviderRuntimeConfig::from_provider(provider, credential);
         let built = factory.build(runtime_config).map_err(|e| {
-            DomainError::internal(DomainResource::Provider, format!("adapter build failed: {e}"))
+            DomainError::internal(
+                DomainResource::Provider,
+                format!("adapter build failed: {e}"),
+            )
         })?;
         self.cache.write().await.insert(
             provider.id.clone(),

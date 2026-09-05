@@ -23,7 +23,8 @@ fn provider_from_row(row: &sqlx::sqlite::SqliteRow) -> Provider {
         id: row.get("id"),
         key: row.get("key"),
         name: row.get("name"),
-        kind: ProviderKind::parse(&row.get::<String, _>("kind")).unwrap_or(ProviderKind::OpenAICompatible),
+        kind: ProviderKind::parse(&row.get::<String, _>("kind"))
+            .unwrap_or(ProviderKind::OpenAICompatible),
         base_url: row.get("base_url"),
         credential_ref: row.get("credential_ref"),
         credential_configured: row.get::<i64, _>("credential_configured") != 0,
@@ -105,20 +106,22 @@ impl ProviderRepository for SqliteProviderRepository {
 
     async fn update(&self, id: &str, update: ProviderUpdate) -> Result<Provider, DomainError> {
         let existing = self.get(id).await?;
-        let credential_configured = update.credential_configured.unwrap_or(existing.credential_configured);
+        let credential_configured = update
+            .credential_configured
+            .unwrap_or(existing.credential_configured);
         let name = update.name.unwrap_or(existing.name);
         let base_url = update.base_url.unwrap_or(existing.base_url);
-        let proxy_url = update
-            .proxy_url
-            .unwrap_or(existing.proxy_url);
+        let proxy_url = update.proxy_url.unwrap_or(existing.proxy_url);
         let timeout_ms = update.timeout_ms.unwrap_or(existing.timeout_ms);
         let max_retries = update.max_retries.unwrap_or(existing.max_retries);
         let enabled = update.enabled.unwrap_or(existing.enabled);
         let status = update.status.unwrap_or(existing.status);
         let config = update.config.unwrap_or(existing.config);
-        let credential_ref = update
-            .credential_ref
-            .unwrap_or(existing.credential_ref.unwrap_or_else(|| format!("provider/{id}/api_key")));
+        let credential_ref = update.credential_ref.unwrap_or(
+            existing
+                .credential_ref
+                .unwrap_or_else(|| format!("provider/{id}/api_key")),
+        );
         sqlx::query(
             "UPDATE providers SET name=?, base_url=?, credential_configured=?, proxy_url=?, timeout_ms=?, max_retries=?, enabled=?, status=?, config_json=?, credential_ref=?, updated_at=? WHERE id=?",
         )
@@ -149,15 +152,22 @@ impl ProviderRepository for SqliteProviderRepository {
         Ok(())
     }
 
-    async fn set_health(&self, id: &str, health: &str, checked_at: chrono::DateTime<Utc>) -> Result<(), DomainError> {
-        sqlx::query("UPDATE providers SET health=?, last_health_check_at=?, updated_at=? WHERE id=?")
-            .bind(health)
-            .bind(ts_to_string(checked_at))
-            .bind(ts_to_string(Utc::now()))
-            .bind(id)
-            .execute(&self.pool)
-            .await
-            .map_err(|e| db_error(DomainResource::Provider, e))?;
+    async fn set_health(
+        &self,
+        id: &str,
+        health: &str,
+        checked_at: chrono::DateTime<Utc>,
+    ) -> Result<(), DomainError> {
+        sqlx::query(
+            "UPDATE providers SET health=?, last_health_check_at=?, updated_at=? WHERE id=?",
+        )
+        .bind(health)
+        .bind(ts_to_string(checked_at))
+        .bind(ts_to_string(Utc::now()))
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| db_error(DomainResource::Provider, e))?;
         Ok(())
     }
 }

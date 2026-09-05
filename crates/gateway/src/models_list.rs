@@ -3,7 +3,6 @@
 use aihub_api_types::gateway as wire;
 use aihub_application::error::{GatewayCode, PipelineError};
 use aihub_application::pipeline::AuthContext;
-use aihub_domain::repos::{ModelRepository, VirtualModelRepository};
 
 use crate::GatewayState;
 

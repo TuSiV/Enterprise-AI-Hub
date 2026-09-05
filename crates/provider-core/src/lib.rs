@@ -4,8 +4,8 @@
 use std::sync::Arc;
 
 use aihub_domain::canonical::{
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest, CanonicalEmbeddingResponse,
-    DiscoveredModel, StreamEvent,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest,
+    CanonicalEmbeddingResponse, DiscoveredModel, StreamEvent,
 };
 use aihub_domain::entities::{Provider, ProviderKind};
 use aihub_secrets::SecretValue;

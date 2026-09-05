@@ -2,7 +2,7 @@
 //! Retry/Failover、Streaming、Usage/Cost 持久化、Quota、Admin API。
 
 use aihub_api_types::admin::*;
-use aihub_config::{Config, Mode, GatewayConfig};
+use aihub_config::{Config, GatewayConfig, Mode};
 use axum::body::Body;
 use axum::http::{Request, StatusCode};
 use axum::response::IntoResponse;
@@ -14,6 +14,7 @@ use tower::ServiceExt;
 // ---------- mock 上游 ----------
 
 #[derive(Clone, Copy)]
+#[allow(dead_code)]
 enum MockBehavior {
     Ok,
     Fail500,
@@ -34,11 +35,17 @@ async fn spawn_mock(behavior: MockBehavior) -> String {
     ) -> axum::response::Response {
         match behavior {
             MockBehavior::Fail500 => {
-                return (StatusCode::INTERNAL_SERVER_ERROR, Json(json!({"error": {"message": "mock 500"}})))
+                return (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    Json(json!({"error": {"message": "mock 500"}})),
+                )
                     .into_response();
             }
             MockBehavior::Fail429 => {
-                return (StatusCode::TOO_MANY_REQUESTS, Json(json!({"error": {"message": "mock 429"}})))
+                return (
+                    StatusCode::TOO_MANY_REQUESTS,
+                    Json(json!({"error": {"message": "mock 429"}})),
+                )
                     .into_response();
             }
             MockBehavior::Ok => {}
@@ -52,7 +59,10 @@ async fn spawn_mock(behavior: MockBehavior) -> String {
         if request["stream"].as_bool().unwrap_or(false) {
             let id = "mock-stream-1";
             let model = request["model"].clone();
-            let words: Vec<String> = content.split_inclusive(' ').map(|s| s.to_string()).collect();
+            let words: Vec<String> = content
+                .split_inclusive(' ')
+                .map(|s| s.to_string())
+                .collect();
             let stream = async_stream::stream! {
                 for word in words {
                     yield Ok::<_, std::convert::Infallible>(axum::response::sse::Event::default().data(
@@ -148,11 +158,14 @@ fn http_req(method: &str, uri: &str, token: Option<&str>, body: Option<Value>) -
 async fn send(router: &Router, req: Request<Body>) -> (StatusCode, Value) {
     let response = router.clone().oneshot(req).await.unwrap();
     let status = response.status();
-    let bytes = axum::body::to_bytes(response.into_body(), 8_000_000).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 8_000_000)
+        .await
+        .unwrap();
     let body = if bytes.is_empty() {
         Value::Null
     } else {
-        serde_json::from_slice(&bytes).unwrap_or(Value::String(String::from_utf8_lossy(&bytes).to_string()))
+        serde_json::from_slice(&bytes)
+            .unwrap_or(Value::String(String::from_utf8_lossy(&bytes).to_string()))
     };
     (status, body)
 }
@@ -194,7 +207,8 @@ async fn setup_world(core: &aihub_server::Core) -> String {
         .await
         .unwrap();
 
-    let chat_pricing = json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 2.0});
+    let chat_pricing =
+        json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 2.0});
     let model_a = state
         .models
         .create(CreateModelRequest {
@@ -235,7 +249,9 @@ async fn setup_world(core: &aihub_server::Core) -> String {
             context_window: None,
             max_output_tokens: None,
             capabilities: Some(json!({})),
-            pricing: Some(json!({"currency": "USD", "unitTokens": 1000000, "input": 0.1, "output": 0.0})),
+            pricing: Some(
+                json!({"currency": "USD", "unitTokens": 1000000, "input": 0.1, "output": 0.0}),
+            ),
             enabled: true,
         })
         .await
@@ -244,37 +260,40 @@ async fn setup_world(core: &aihub_server::Core) -> String {
 
     // Virtual Model：A 优先，B 兜底（failover 场景）
     // general-smart / embedding-default 已由 seed 预置：存在则替换 targets
-    let existing = state.repos.virtual_models.get_by_key("general-smart").await.ok();
+    let existing = state
+        .repos
+        .virtual_models
+        .get_by_key("general-smart")
+        .await
+        .ok();
     let general_smart = match existing {
-        Some(vm) => {
-            state
-                .virtual_models
-                .replace_targets(
-                    &vm.id,
-                    ReplaceTargetsRequest {
-                        targets: vec![
-                            TargetInput {
-                                model_id: model_a.id.clone(),
-                                priority: Some(10),
-                                weight: None,
-                                enabled: true,
-                                condition: None,
-                                overrides: None,
-                            },
-                            TargetInput {
-                                model_id: model_b.id.clone(),
-                                priority: Some(20),
-                                weight: None,
-                                enabled: true,
-                                condition: None,
-                                overrides: None,
-                            },
-                        ],
-                    },
-                )
-                .await
-                .unwrap()
-        }
+        Some(vm) => state
+            .virtual_models
+            .replace_targets(
+                &vm.id,
+                ReplaceTargetsRequest {
+                    targets: vec![
+                        TargetInput {
+                            model_id: model_a.id.clone(),
+                            priority: Some(10),
+                            weight: None,
+                            enabled: true,
+                            condition: None,
+                            overrides: None,
+                        },
+                        TargetInput {
+                            model_id: model_b.id.clone(),
+                            priority: Some(20),
+                            weight: None,
+                            enabled: true,
+                            condition: None,
+                            overrides: None,
+                        },
+                    ],
+                },
+            )
+            .await
+            .unwrap(),
         None => state
             .virtual_models
             .create(CreateVirtualModelRequest {
@@ -309,7 +328,12 @@ async fn setup_world(core: &aihub_server::Core) -> String {
     let _ = &general_smart;
 
     // embedding virtual model
-    let existing = state.repos.virtual_models.get_by_key("embedding-default").await.ok();
+    let existing = state
+        .repos
+        .virtual_models
+        .get_by_key("embedding-default")
+        .await
+        .ok();
     match existing {
         Some(vm) => {
             state
@@ -369,7 +393,14 @@ async fn setup_world(core: &aihub_server::Core) -> String {
         .unwrap();
     let key = state
         .applications
-        .create_key(&app.id, CreateApiKeyRequest { name: "default".into(), scopes: None, expires_at: None })
+        .create_key(
+            &app.id,
+            CreateApiKeyRequest {
+                name: "default".into(),
+                scopes: None,
+                expires_at: None,
+            },
+        )
         .await
         .unwrap();
     key.plaintext
@@ -416,7 +447,10 @@ async fn gateway_e2e_auth_models_chat_failover_stream() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "body: {body}");
-    assert_eq!(body["choices"][0]["message"]["content"], "mock-echo: hello hub");
+    assert_eq!(
+        body["choices"][0]["message"]["content"],
+        "mock-echo: hello hub"
+    );
     assert_eq!(body["usage"]["prompt_tokens"], 12);
     assert_eq!(body["usage"]["completion_tokens"], 8);
 
@@ -450,9 +484,14 @@ async fn gateway_e2e_auth_models_chat_failover_stream() {
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::OK);
-    let bytes = axum::body::to_bytes(response.into_body(), 8_000_000).await.unwrap();
+    let bytes = axum::body::to_bytes(response.into_body(), 8_000_000)
+        .await
+        .unwrap();
     let text = String::from_utf8_lossy(&bytes).to_string();
-    assert!(text.contains("mock-echo:") && text.contains("stream "), "sse: {text}");
+    assert!(
+        text.contains("mock-echo:") && text.contains("stream "),
+        "sse: {text}"
+    );
     assert!(text.contains("chat.completion.chunk"));
     assert!(text.contains("[DONE]"));
 
@@ -515,31 +554,31 @@ async fn gateway_e2e_revoked_key_rejected() {
             context_window: None,
             max_output_tokens: None,
             capabilities: Some(json!({})),
-            pricing: Some(json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 1.0})),
+            pricing: Some(
+                json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 1.0}),
+            ),
             enabled: true,
         })
         .await
         .unwrap();
     state
         .virtual_models
-        .create(
-            CreateVirtualModelRequest {
-                key: "solo-smart".into(),
-                name: "Solo".into(),
-                description: None,
-                routing_strategy: "priority_failover".into(),
+        .create(CreateVirtualModelRequest {
+            key: "solo-smart".into(),
+            name: "Solo".into(),
+            description: None,
+            routing_strategy: "priority_failover".into(),
+            enabled: true,
+            config: Some(json!({})),
+            targets: vec![TargetInput {
+                model_id: model.id.clone(),
+                priority: Some(1),
+                weight: None,
                 enabled: true,
-                config: Some(json!({})),
-                targets: vec![TargetInput {
-                    model_id: model.id.clone(),
-                    priority: Some(1),
-                    weight: None,
-                    enabled: true,
-                    condition: None,
-                    overrides: None,
-                }],
-            },
-        )
+                condition: None,
+                overrides: None,
+            }],
+        })
         .await
         .unwrap();
     let app = state
@@ -556,7 +595,14 @@ async fn gateway_e2e_revoked_key_rejected() {
         .unwrap();
     let key = state
         .applications
-        .create_key(&app.id, CreateApiKeyRequest { name: "default".into(), scopes: None, expires_at: None })
+        .create_key(
+            &app.id,
+            CreateApiKeyRequest {
+                name: "default".into(),
+                scopes: None,
+                expires_at: None,
+            },
+        )
         .await
         .unwrap();
 
@@ -622,31 +668,31 @@ async fn gateway_e2e_rate_limit_and_admin_auth() {
             context_window: None,
             max_output_tokens: None,
             capabilities: Some(json!({})),
-            pricing: Some(json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 1.0})),
+            pricing: Some(
+                json!({"currency": "USD", "unitTokens": 1000000, "input": 1.0, "output": 1.0}),
+            ),
             enabled: true,
         })
         .await
         .unwrap();
     state
         .virtual_models
-        .create(
-            CreateVirtualModelRequest {
-                key: "rl-smart".into(),
-                name: "RL".into(),
-                description: None,
-                routing_strategy: "priority_failover".into(),
+        .create(CreateVirtualModelRequest {
+            key: "rl-smart".into(),
+            name: "RL".into(),
+            description: None,
+            routing_strategy: "priority_failover".into(),
+            enabled: true,
+            config: Some(json!({})),
+            targets: vec![TargetInput {
+                model_id: model.id.clone(),
+                priority: Some(1),
+                weight: None,
                 enabled: true,
-                config: Some(json!({})),
-                targets: vec![TargetInput {
-                    model_id: model.id.clone(),
-                    priority: Some(1),
-                    weight: None,
-                    enabled: true,
-                    condition: None,
-                    overrides: None,
-                }],
-            },
-        )
+                condition: None,
+                overrides: None,
+            }],
+        })
         .await
         .unwrap();
     let app = state
@@ -670,27 +716,49 @@ async fn gateway_e2e_rate_limit_and_admin_auth() {
         .unwrap();
     let key = state
         .applications
-        .create_key(&app.id, CreateApiKeyRequest { name: "default".into(), scopes: None, expires_at: None })
+        .create_key(
+            &app.id,
+            CreateApiKeyRequest {
+                name: "default".into(),
+                scopes: None,
+                expires_at: None,
+            },
+        )
         .await
         .unwrap();
 
     let payload = json!({"model": "rl-smart", "messages": [{"role": "user", "content": "hi"}]});
     let (status, _) = send(
         &core.router,
-        http_req("POST", "/v1/chat/completions", Some(&key.plaintext), Some(payload.clone())),
+        http_req(
+            "POST",
+            "/v1/chat/completions",
+            Some(&key.plaintext),
+            Some(payload.clone()),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     let (status, _) = send(
         &core.router,
-        http_req("POST", "/v1/chat/completions", Some(&key.plaintext), Some(payload.clone())),
+        http_req(
+            "POST",
+            "/v1/chat/completions",
+            Some(&key.plaintext),
+            Some(payload.clone()),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     // 第三次触发 RPM 限制 → 429（§15.3）
     let (status, body) = send(
         &core.router,
-        http_req("POST", "/v1/chat/completions", Some(&key.plaintext), Some(payload)),
+        http_req(
+            "POST",
+            "/v1/chat/completions",
+            Some(&key.plaintext),
+            Some(payload),
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::TOO_MANY_REQUESTS, "body: {body}");
@@ -705,7 +773,12 @@ async fn gateway_e2e_rate_limit_and_admin_auth() {
     assert_eq!(status, StatusCode::UNAUTHORIZED);
     let (status, body) = send(
         &core.router,
-        http_req("GET", "/api/v1/admin/providers", Some(&core.admin_token), None),
+        http_req(
+            "GET",
+            "/api/v1/admin/providers",
+            Some(&core.admin_token),
+            None,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

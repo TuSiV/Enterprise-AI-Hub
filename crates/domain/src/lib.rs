@@ -8,10 +8,10 @@ pub mod error;
 pub mod repos;
 
 pub use canonical::{
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest, CanonicalEmbeddingResponse,
-    CanonicalMessage, CanonicalUsage, DiscoveredModel, MessageRole, ResponseFormat,
-    StreamEvent, ToolChoice, ToolDefinitionData, UsageSource,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest,
+    CanonicalEmbeddingResponse, CanonicalMessage, CanonicalUsage, DiscoveredModel, MessageRole,
+    ResponseFormat, StreamEvent, ToolChoice, ToolDefinitionData, UsageSource,
 };
-pub use cost::{Pricing, CostBreakdown};
+pub use cost::{CostBreakdown, Pricing};
 pub use entities::*;
 pub use error::{DomainError, DomainErrorCode, DomainResource, ErrorCategory};

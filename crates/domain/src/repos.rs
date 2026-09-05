@@ -129,7 +129,11 @@ pub trait VirtualModelRepository: Send + Sync {
     async fn list(&self) -> Result<Vec<VirtualModel>>;
     async fn update(&self, id: &str, update: VirtualModelUpdate) -> Result<VirtualModel>;
     async fn delete(&self, id: &str) -> Result<()>;
-    async fn replace_targets(&self, virtual_model_id: &str, targets: Vec<NewTarget>) -> Result<Vec<VirtualModelTarget>>;
+    async fn replace_targets(
+        &self,
+        virtual_model_id: &str,
+        targets: Vec<NewTarget>,
+    ) -> Result<Vec<VirtualModelTarget>>;
     async fn targets_for(&self, virtual_model_id: &str) -> Result<Vec<VirtualModelTarget>>;
     async fn list_all_targets(&self) -> Result<Vec<VirtualModelTarget>>;
 }
@@ -208,8 +212,17 @@ pub struct NewApiKey {
 
 #[async_trait]
 pub trait QuotaRepository: Send + Sync {
-    async fn upsert_for_subject(&self, subject_type: &str, subject_id: &str, policy: QuotaValues) -> Result<QuotaPolicy>;
-    async fn get_for_subject(&self, subject_type: &str, subject_id: &str) -> Result<Option<QuotaPolicy>>;
+    async fn upsert_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+        policy: QuotaValues,
+    ) -> Result<QuotaPolicy>;
+    async fn get_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+    ) -> Result<Option<QuotaPolicy>>;
 }
 
 #[derive(Debug, Clone, Default)]
@@ -258,7 +271,13 @@ pub trait RequestRepository: Send + Sync {
     async fn insert_cost(&self, cost: CostRecord) -> Result<()>;
     async fn usage_for_request(&self, request_id: &str) -> Result<Option<UsageRecord>>;
     async fn cost_for_request(&self, request_id: &str) -> Result<Option<CostRecord>>;
-    async fn update_resolved(&self, id: &str, model_id: &str, model_key: &str, provider_id: &str) -> Result<()>;
+    async fn update_resolved(
+        &self,
+        id: &str,
+        model_id: &str,
+        model_key: &str,
+        provider_id: &str,
+    ) -> Result<()>;
 }
 
 #[derive(Debug, Clone)]
@@ -300,11 +319,23 @@ pub struct UsageQuery {
 #[async_trait]
 pub trait UsageRepository: Send + Sync {
     async fn summary(&self, query: &UsageQuery) -> Result<UsageAggregates>;
-    async fn timeseries(&self, query: &UsageQuery, bucket: &str) -> Result<Vec<(String, UsageAggregates)>>;
+    async fn timeseries(
+        &self,
+        query: &UsageQuery,
+        bucket: &str,
+    ) -> Result<Vec<(String, UsageAggregates)>>;
     async fn by_model(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>>;
     async fn by_application(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>>;
-    async fn monthly_cost_for_application(&self, application_id: &str, month_start: DateTime<Utc>) -> Result<i64>;
-    async fn monthly_tokens_for_application(&self, application_id: &str, month_start: DateTime<Utc>) -> Result<i64>;
+    async fn monthly_cost_for_application(
+        &self,
+        application_id: &str,
+        month_start: DateTime<Utc>,
+    ) -> Result<i64>;
+    async fn monthly_tokens_for_application(
+        &self,
+        application_id: &str,
+        month_start: DateTime<Utc>,
+    ) -> Result<i64>;
 }
 
 #[derive(Debug, Clone, Default)]

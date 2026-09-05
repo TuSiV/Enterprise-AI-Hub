@@ -40,7 +40,9 @@ pub async fn execute_embeddings(
         .resolve(&request.model)
         .await
         .map_err(|e| PipelineError::from_domain(&e))?;
-    if let Err(message) = aihub_application::resolver::ModelResolver::authorize(&ctx.application, &route) {
+    if let Err(message) =
+        aihub_application::resolver::ModelResolver::authorize(&ctx.application, &route)
+    {
         return Err(PipelineError::new(GatewayCode::ModelNotAllowed, message));
     }
     let Some(candidate) = route.candidates.first().cloned() else {
@@ -90,47 +92,63 @@ pub async fn execute_embeddings(
                 total_tokens: 0,
                 source: aihub_domain::canonical::UsageSource::Estimated,
             });
-            let _ = state.repos.requests.finish(
-                &request_id,
-                RequestFinish {
-                    status: RequestStatus::Completed,
-                    http_status: Some(200),
-                    completed_at: chrono::Utc::now(),
-                    ttft_ms: None,
-                    latency_ms: Some(started.elapsed().as_millis() as i64),
-                    retry_count: 0,
-                    error_code: None,
-                    error_message_safe: None,
-                    resolved_model_id: Some(candidate.model.id.clone()),
-                    resolved_model_key: Some(candidate.model.model_key.clone()),
-                    provider_id: Some(candidate.provider.id.clone()),
-                },
-            );
-            let _ = state.repos.requests.insert_usage(aihub_domain::entities::UsageRecord {
-                id: uuid::Uuid::new_v4().to_string(),
-                request_id: request_id.clone(),
-                input_tokens: usage.input_tokens,
-                output_tokens: usage.output_tokens,
-                cached_input_tokens: usage.cached_input_tokens,
-                reasoning_tokens: usage.reasoning_tokens,
-                total_tokens: usage.total_tokens,
-                usage_source: "provider".into(),
-                raw_usage: serde_json::to_value(&usage).unwrap_or_default(),
-                created_at: chrono::Utc::now(),
-            });
-            let _ = state.repos.requests.insert_cost(aihub_domain::entities::CostRecord {
-                id: uuid::Uuid::new_v4().to_string(),
-                request_id: request_id.clone(),
-                currency: candidate.model.pricing.currency.clone(),
-                input_cost_microunits: 0,
-                output_cost_microunits: 0,
-                cache_cost_microunits: 0,
-                reasoning_cost_microunits: 0,
-                total_cost_microunits: aihub_domain::cost::calculate(&candidate.model.pricing, &usage)
+            let _ = state
+                .repos
+                .requests
+                .finish(
+                    &request_id,
+                    RequestFinish {
+                        status: RequestStatus::Completed,
+                        http_status: Some(200),
+                        completed_at: chrono::Utc::now(),
+                        ttft_ms: None,
+                        latency_ms: Some(started.elapsed().as_millis() as i64),
+                        retry_count: 0,
+                        error_code: None,
+                        error_message_safe: None,
+                        resolved_model_id: Some(candidate.model.id.clone()),
+                        resolved_model_key: Some(candidate.model.model_key.clone()),
+                        provider_id: Some(candidate.provider.id.clone()),
+                    },
+                )
+                .await;
+            let _ = state
+                .repos
+                .requests
+                .insert_usage(aihub_domain::entities::UsageRecord {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    request_id: request_id.clone(),
+                    input_tokens: usage.input_tokens,
+                    output_tokens: usage.output_tokens,
+                    cached_input_tokens: usage.cached_input_tokens,
+                    reasoning_tokens: usage.reasoning_tokens,
+                    total_tokens: usage.total_tokens,
+                    usage_source: "provider".into(),
+                    raw_usage: serde_json::to_value(&usage).unwrap_or_default(),
+                    created_at: chrono::Utc::now(),
+                })
+                .await;
+            let _ = state
+                .repos
+                .requests
+                .insert_cost(aihub_domain::entities::CostRecord {
+                    id: uuid::Uuid::new_v4().to_string(),
+                    request_id: request_id.clone(),
+                    currency: candidate.model.pricing.currency.clone(),
+                    input_cost_microunits: 0,
+                    output_cost_microunits: 0,
+                    cache_cost_microunits: 0,
+                    reasoning_cost_microunits: 0,
+                    total_cost_microunits: aihub_domain::cost::calculate(
+                        &candidate.model.pricing,
+                        &usage,
+                    )
                     .total_cost_microunits,
-                pricing_snapshot: serde_json::to_value(&candidate.model.pricing).unwrap_or_default(),
-                created_at: chrono::Utc::now(),
-            });
+                    pricing_snapshot: serde_json::to_value(&candidate.model.pricing)
+                        .unwrap_or_default(),
+                    created_at: chrono::Utc::now(),
+                })
+                .await;
             Ok(wire::EmbeddingResponse {
                 object: "list".into(),
                 data: response
@@ -155,22 +173,26 @@ pub async fn execute_embeddings(
         }
         Err(err) => {
             let pipeline_err = PipelineError::from_provider_error(&err);
-            let _ = state.repos.requests.finish(
-                &request_id,
-                RequestFinish {
-                    status: RequestStatus::Failed,
-                    http_status: Some(pipeline_err.code.http_status() as i64),
-                    completed_at: chrono::Utc::now(),
-                    ttft_ms: None,
-                    latency_ms: Some(started.elapsed().as_millis() as i64),
-                    retry_count: 0,
-                    error_code: Some(pipeline_err.code.as_str().to_string()),
-                    error_message_safe: Some(pipeline_err.message.clone()),
-                    resolved_model_id: Some(candidate.model.id.clone()),
-                    resolved_model_key: Some(candidate.model.model_key.clone()),
-                    provider_id: Some(candidate.provider.id.clone()),
-                },
-            );
+            let _ = state
+                .repos
+                .requests
+                .finish(
+                    &request_id,
+                    RequestFinish {
+                        status: RequestStatus::Failed,
+                        http_status: Some(pipeline_err.code.http_status() as i64),
+                        completed_at: chrono::Utc::now(),
+                        ttft_ms: None,
+                        latency_ms: Some(started.elapsed().as_millis() as i64),
+                        retry_count: 0,
+                        error_code: Some(pipeline_err.code.as_str().to_string()),
+                        error_message_safe: Some(pipeline_err.message.clone()),
+                        resolved_model_id: Some(candidate.model.id.clone()),
+                        resolved_model_key: Some(candidate.model.model_key.clone()),
+                        provider_id: Some(candidate.provider.id.clone()),
+                    },
+                )
+                .await;
             Err(pipeline_err)
         }
     }

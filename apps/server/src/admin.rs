@@ -18,13 +18,21 @@ pub fn router(state: AppState) -> Router {
         // system
         .route("/v1/admin/config", get(system_info))
         // providers
-        .route("/v1/admin/providers", get(providers_list).post(providers_create))
+        .route(
+            "/v1/admin/providers",
+            get(providers_list).post(providers_create),
+        )
         .route(
             "/v1/admin/providers/{id}",
-            get(providers_get).patch(providers_update).delete(providers_delete),
+            get(providers_get)
+                .patch(providers_update)
+                .delete(providers_delete),
         )
         .route("/v1/admin/providers/{id}/test", post(providers_test))
-        .route("/v1/admin/providers/{id}/discover-models", post(providers_discover))
+        .route(
+            "/v1/admin/providers/{id}/discover-models",
+            post(providers_discover),
+        )
         // models
         .route("/v1/admin/models", get(models_list).post(models_create))
         .route(
@@ -40,10 +48,18 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/v1/admin/virtual-models/{id}",
-            get(virtual_models_get).patch(virtual_models_update).delete(virtual_models_delete),
+            get(virtual_models_get)
+                .patch(virtual_models_update)
+                .delete(virtual_models_delete),
         )
-        .route("/v1/admin/virtual-models/{id}/targets", put(virtual_models_targets))
-        .route("/v1/admin/virtual-models/{id}/simulate-route", post(virtual_models_simulate))
+        .route(
+            "/v1/admin/virtual-models/{id}/targets",
+            put(virtual_models_targets),
+        )
+        .route(
+            "/v1/admin/virtual-models/{id}/simulate-route",
+            post(virtual_models_simulate),
+        )
         // applications / keys
         .route(
             "/v1/admin/applications",
@@ -51,13 +67,18 @@ pub fn router(state: AppState) -> Router {
         )
         .route(
             "/v1/admin/applications/{id}",
-            get(applications_get).patch(applications_update).delete(applications_delete),
+            get(applications_get)
+                .patch(applications_update)
+                .delete(applications_delete),
         )
         .route(
             "/v1/admin/applications/{id}/keys",
             get(keys_list).post(keys_create),
         )
-        .route("/v1/admin/applications/{id}/keys/{keyId}", delete(keys_revoke))
+        .route(
+            "/v1/admin/applications/{id}/keys/{keyId}",
+            delete(keys_revoke),
+        )
         // usage / cost / requests / audit
         .route("/v1/admin/usage/summary", get(usage_summary))
         .route("/v1/admin/cost/summary", get(usage_summary))
@@ -70,7 +91,10 @@ pub fn router(state: AppState) -> Router {
         // playground
         .route("/v1/admin/playground/run", post(playground_run))
         .route("/v1/admin/playground/stream", post(playground_stream))
-        .route_layer(axum::middleware::from_fn_with_state(state.clone(), admin_auth));
+        .route_layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            admin_auth,
+        ));
     authed.with_state(state)
 }
 
@@ -96,7 +120,10 @@ async fn admin_auth(
     if provided != Some(state.admin_token.as_str()) {
         return (
             StatusCode::UNAUTHORIZED,
-            Json(ApiErrorBody::new("AIH_UNAUTHORIZED", "invalid or missing admin token")),
+            Json(ApiErrorBody::new(
+                "AIH_UNAUTHORIZED",
+                "invalid or missing admin token",
+            )),
         )
             .into_response();
     }
@@ -113,12 +140,20 @@ fn domain_error_response(err: &DomainError) -> Response {
         aihub_domain::DomainErrorCode::ResourceInUse => StatusCode::CONFLICT,
         aihub_domain::DomainErrorCode::Internal => StatusCode::INTERNAL_SERVER_ERROR,
     };
-    (status, Json(ApiErrorBody::new(err.code.as_str(), &err.message))).into_response()
+    (
+        status,
+        Json(ApiErrorBody::new(err.code.as_str(), &err.message)),
+    )
+        .into_response()
 }
 
 fn pipeline_error_response(err: &aihub_application::error::PipelineError) -> Response {
     let status = StatusCode::from_u16(err.code.http_status()).unwrap_or(StatusCode::BAD_GATEWAY);
-    (status, Json(ApiErrorBody::new(err.code.as_str(), &err.message))).into_response()
+    (
+        status,
+        Json(ApiErrorBody::new(err.code.as_str(), &err.message)),
+    )
+        .into_response()
 }
 
 // ---------- System ----------
@@ -130,7 +165,10 @@ async fn system_info(State(state): State<AppState>) -> Json<SystemInfo> {
             aihub_config::Mode::Desktop => "desktop".into(),
             aihub_config::Mode::Server => "server".into(),
         },
-        gateway_endpoint: format!("http://{}:{}", state.config.gateway.host, state.config.gateway.port),
+        gateway_endpoint: format!(
+            "http://{}:{}",
+            state.config.gateway.host, state.config.gateway.port
+        ),
         db_driver: state.config.database.driver.clone(),
         started_at: state.started_at.to_rfc3339(),
     })
@@ -138,7 +176,9 @@ async fn system_info(State(state): State<AppState>) -> Json<SystemInfo> {
 
 // ---------- Providers ----------
 
-async fn providers_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+async fn providers_list(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.providers.list().await {
         Ok(list) => Ok(Json(serde_json::json!({ "data": list, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -155,7 +195,10 @@ async fn providers_create(
     }
 }
 
-async fn providers_get(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn providers_get(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.providers.get(&id).await {
         Ok(dto) => Ok(Json(serde_json::json!({ "data": dto, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -173,21 +216,32 @@ async fn providers_update(
     }
 }
 
-async fn providers_delete(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn providers_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.providers.delete(&id).await {
-        Ok(()) => Ok(Json(serde_json::json!({ "data": {"deleted": true}, "meta": {} }))),
+        Ok(()) => Ok(Json(
+            serde_json::json!({ "data": {"deleted": true}, "meta": {} }),
+        )),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
 
-async fn providers_test(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn providers_test(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.providers.test(&id).await {
         Ok(result) => Ok(Json(serde_json::json!({ "data": result, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
 
-async fn providers_discover(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn providers_discover(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.providers.discover_models(&id).await {
         Ok(result) => Ok(Json(serde_json::json!({ "data": result, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -230,7 +284,10 @@ async fn models_create(
     }
 }
 
-async fn models_get(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn models_get(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.models.get(&id).await {
         Ok(dto) => Ok(Json(serde_json::json!({ "data": dto, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -248,14 +305,22 @@ async fn models_update(
     }
 }
 
-async fn models_delete(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn models_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.models.delete(&id).await {
-        Ok(()) => Ok(Json(serde_json::json!({ "data": {"deleted": true}, "meta": {} }))),
+        Ok(()) => Ok(Json(
+            serde_json::json!({ "data": {"deleted": true}, "meta": {} }),
+        )),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
 
-async fn models_enable(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn models_enable(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state
         .models
         .update(
@@ -272,7 +337,10 @@ async fn models_enable(State(state): State<AppState>, Path(id): Path<String>) ->
     }
 }
 
-async fn models_disable(State(state): State<AppState>, Path(id): Path<String>) -> Result<Json<serde_json::Value>, Response> {
+async fn models_disable(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state
         .models
         .update(
@@ -291,7 +359,9 @@ async fn models_disable(State(state): State<AppState>, Path(id): Path<String>) -
 
 // ---------- Virtual Models ----------
 
-async fn virtual_models_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+async fn virtual_models_list(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.virtual_models.list().await {
         Ok(list) => Ok(Json(serde_json::json!({ "data": list, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -334,7 +404,9 @@ async fn virtual_models_delete(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, Response> {
     match state.virtual_models.delete(&id).await {
-        Ok(()) => Ok(Json(serde_json::json!({ "data": {"deleted": true}, "meta": {} }))),
+        Ok(()) => Ok(Json(
+            serde_json::json!({ "data": {"deleted": true}, "meta": {} }),
+        )),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
@@ -362,7 +434,9 @@ async fn virtual_models_simulate(
 
 // ---------- Applications / Keys ----------
 
-async fn applications_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+async fn applications_list(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, Response> {
     match state.applications.list().await {
         Ok(list) => Ok(Json(serde_json::json!({ "data": list, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
@@ -405,7 +479,9 @@ async fn applications_delete(
     Path(id): Path<String>,
 ) -> Result<Json<serde_json::Value>, Response> {
     match state.applications.delete(&id).await {
-        Ok(()) => Ok(Json(serde_json::json!({ "data": {"deleted": true}, "meta": {} }))),
+        Ok(()) => Ok(Json(
+            serde_json::json!({ "data": {"deleted": true}, "meta": {} }),
+        )),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
@@ -436,7 +512,9 @@ async fn keys_revoke(
     Path((id, key_id)): Path<(String, String)>,
 ) -> Result<Json<serde_json::Value>, Response> {
     match state.applications.revoke_key(&id, &key_id).await {
-        Ok(()) => Ok(Json(serde_json::json!({ "data": {"revoked": true}, "meta": {} }))),
+        Ok(()) => Ok(Json(
+            serde_json::json!({ "data": {"revoked": true}, "meta": {} }),
+        )),
         Err(e) => Err(domain_error_response(&e)),
     }
 }
@@ -462,13 +540,17 @@ struct UsageQueryParams {
     resource_type: Option<String>,
 }
 
+#[allow(clippy::result_large_err)]
 fn parse_time(value: &Option<String>) -> Result<Option<chrono::DateTime<chrono::Utc>>, Response> {
     match value {
         Some(raw) => match chrono::DateTime::parse_from_rfc3339(raw) {
             Ok(t) => Ok(Some(t.with_timezone(&chrono::Utc))),
             Err(_) => Err((
                 StatusCode::BAD_REQUEST,
-                Json(ApiErrorBody::new("AIH_INVALID_REQUEST", "invalid RFC3339 timestamp")),
+                Json(ApiErrorBody::new(
+                    "AIH_INVALID_REQUEST",
+                    "invalid RFC3339 timestamp",
+                )),
             )
                 .into_response()),
         },
@@ -476,6 +558,7 @@ fn parse_time(value: &Option<String>) -> Result<Option<chrono::DateTime<chrono::
     }
 }
 
+#[allow(clippy::result_large_err)]
 async fn usage_summary(
     State(state): State<AppState>,
     Query(params): Query<UsageQueryParams>,
@@ -626,8 +709,14 @@ async fn requests_list(
     {
         Ok(page_response) => {
             let PageResponse { data, meta } = page_response;
-            let PageMeta { page, page_size, total } = meta;
-            Ok(Json(serde_json::json!({ "data": data, "meta": {"page": page, "pageSize": page_size, "total": total} })))
+            let PageMeta {
+                page,
+                page_size,
+                total,
+            } = meta;
+            Ok(Json(
+                serde_json::json!({ "data": data, "meta": {"page": page, "pageSize": page_size, "total": total} }),
+            ))
         }
         Err(e) => Err(domain_error_response(&e)),
     }
@@ -656,8 +745,14 @@ async fn audit_list(
     {
         Ok(page_response) => {
             let PageResponse { data, meta } = page_response;
-            let PageMeta { page, page_size, total } = meta;
-            Ok(Json(serde_json::json!({ "data": data, "meta": {"page": page, "pageSize": page_size, "total": total} })))
+            let PageMeta {
+                page,
+                page_size,
+                total,
+            } = meta;
+            Ok(Json(
+                serde_json::json!({ "data": data, "meta": {"page": page, "pageSize": page_size, "total": total} }),
+            ))
         }
         Err(e) => Err(domain_error_response(&e)),
     }

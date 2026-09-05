@@ -10,9 +10,7 @@ use axum::routing::{get, post};
 use axum::{Json, Router};
 
 #[derive(Clone, Default)]
-struct MockState {
-    fail_next: std::sync::Arc<std::sync::atomic::AtomicUsize>,
-}
+struct MockState;
 
 fn unix_now() -> i64 {
     chrono::Utc::now().timestamp()
@@ -38,7 +36,9 @@ fn usage(messages: &[wire::ChatMessage], output: &str) -> wire::Usage {
         completion_tokens: (output.len() / 4).max(1) as i64,
         total_tokens: 0,
         prompt_tokens_details: Some(wire::PromptTokensDetails { cached_tokens: 0 }),
-        completion_tokens_details: Some(wire::CompletionTokensDetails { reasoning_tokens: 0 }),
+        completion_tokens_details: Some(wire::CompletionTokensDetails {
+            reasoning_tokens: 0,
+        }),
     }
     .with_total()
 }
@@ -128,7 +128,10 @@ async fn chat_completions(
 
     if request.is_stream() {
         // SSE：按词分片输出
-        let chunks = content.split_inclusive(' ').map(|s| s.to_string()).collect::<Vec<_>>();
+        let chunks = content
+            .split_inclusive(' ')
+            .map(|s| s.to_string())
+            .collect::<Vec<_>>();
         let usage_clone = usage.clone();
         let stream = async_stream::stream! {
             let id = format!("mock-{}", uuid::Uuid::new_v4());
@@ -249,7 +252,7 @@ async fn main() {
         .ok()
         .and_then(|p| p.parse().ok())
         .unwrap_or(9901);
-    let state = MockState::default();
+    let state = MockState;
     let app = Router::new()
         .route("/v1/models", get(models))
         .route("/v1/chat/completions", post(chat_completions))

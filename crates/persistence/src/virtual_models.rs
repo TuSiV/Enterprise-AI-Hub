@@ -45,7 +45,11 @@ fn target_from_row(row: &sqlx::sqlite::SqliteRow) -> VirtualModelTarget {
     }
 }
 
-async fn insert_targets(pool: &SqlitePool, vm_id: &str, targets: Vec<NewTarget>) -> Result<(), DomainError> {
+async fn insert_targets(
+    pool: &SqlitePool,
+    vm_id: &str,
+    targets: Vec<NewTarget>,
+) -> Result<(), DomainError> {
     for target in targets {
         sqlx::query(
             "INSERT INTO virtual_model_targets (id, virtual_model_id, model_id, priority, weight, enabled, condition_json, overrides_json)
@@ -69,7 +73,11 @@ async fn insert_targets(pool: &SqlitePool, vm_id: &str, targets: Vec<NewTarget>)
 
 #[async_trait]
 impl VirtualModelRepository for SqliteVirtualModelRepository {
-    async fn create(&self, vm: NewVirtualModel, targets: Vec<NewTarget>) -> Result<VirtualModel, DomainError> {
+    async fn create(
+        &self,
+        vm: NewVirtualModel,
+        targets: Vec<NewTarget>,
+    ) -> Result<VirtualModel, DomainError> {
         let id = uuid::Uuid::new_v4().to_string();
         let now = now_rfc3339();
         sqlx::query(
@@ -120,7 +128,11 @@ impl VirtualModelRepository for SqliteVirtualModelRepository {
         Ok(rows.iter().map(vm_from_row).collect())
     }
 
-    async fn update(&self, id: &str, update: VirtualModelUpdate) -> Result<VirtualModel, DomainError> {
+    async fn update(
+        &self,
+        id: &str,
+        update: VirtualModelUpdate,
+    ) -> Result<VirtualModel, DomainError> {
         let existing = self.get(id).await?;
         let name = update.name.unwrap_or(existing.name);
         let description = update.description.unwrap_or(existing.description);
@@ -152,7 +164,11 @@ impl VirtualModelRepository for SqliteVirtualModelRepository {
         Ok(())
     }
 
-    async fn replace_targets(&self, virtual_model_id: &str, targets: Vec<NewTarget>) -> Result<Vec<VirtualModelTarget>, DomainError> {
+    async fn replace_targets(
+        &self,
+        virtual_model_id: &str,
+        targets: Vec<NewTarget>,
+    ) -> Result<Vec<VirtualModelTarget>, DomainError> {
         let mut tx = self
             .pool
             .begin()
@@ -170,7 +186,10 @@ impl VirtualModelRepository for SqliteVirtualModelRepository {
         self.targets_for(virtual_model_id).await
     }
 
-    async fn targets_for(&self, virtual_model_id: &str) -> Result<Vec<VirtualModelTarget>, DomainError> {
+    async fn targets_for(
+        &self,
+        virtual_model_id: &str,
+    ) -> Result<Vec<VirtualModelTarget>, DomainError> {
         let rows = sqlx::query(
             "SELECT * FROM virtual_model_targets WHERE virtual_model_id = ? ORDER BY priority ASC",
         )

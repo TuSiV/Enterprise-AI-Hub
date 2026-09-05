@@ -1,7 +1,7 @@
 //! 模型解析（方案 §11.2）：VirtualModel key → Physical Model alias → direct model。
 
 use aihub_domain::entities::{Application, Model, Provider, VirtualModel};
-use aihub_domain::repos::{ApplicationRepository, ModelRepository, ProviderRepository, VirtualModelRepository};
+use aihub_domain::repos::{ModelRepository, ProviderRepository, VirtualModelRepository};
 use aihub_domain::DomainResource;
 use std::sync::Arc;
 
@@ -40,7 +40,10 @@ impl ModelResolver {
     }
 
     /// 解析顺序（§11.2）：VirtualModel 命中 → direct model → MODEL_NOT_FOUND。
-    pub async fn resolve(&self, model_ref: &str) -> Result<ResolvedRoute, aihub_domain::DomainError> {
+    pub async fn resolve(
+        &self,
+        model_ref: &str,
+    ) -> Result<ResolvedRoute, aihub_domain::DomainError> {
         // 1. Virtual Model
         if let Ok(virtual_model) = self.virtual_models.get_by_key(model_ref).await {
             if !virtual_model.enabled {
@@ -83,7 +86,10 @@ impl ModelResolver {
             .await?;
         let matches: Vec<&Model> = models.iter().filter(|m| m.model_key == model_ref).collect();
         match matches.len() {
-            0 => Err(aihub_domain::DomainError::not_found(DomainResource::Model, model_ref)),
+            0 => Err(aihub_domain::DomainError::not_found(
+                DomainResource::Model,
+                model_ref,
+            )),
             1 => {
                 let model = matches[0].clone();
                 let provider = self.providers.get(&model.provider_id).await?;
@@ -99,7 +105,9 @@ impl ModelResolver {
             }
             _ => Err(aihub_domain::DomainError::validation(
                 DomainResource::Model,
-                format!("model key '{model_ref}' is ambiguous across providers; use a virtual model"),
+                format!(
+                    "model key '{model_ref}' is ambiguous across providers; use a virtual model"
+                ),
             )),
         }
     }
@@ -116,8 +124,15 @@ impl ModelResolver {
             let Some(vm) = &route.virtual_model else {
                 return Err("direct models require empty allowed_virtual_models policy or explicit allowance".to_string());
             };
-            if !application.allowed_virtual_models.iter().any(|k| k == &vm.key) {
-                return Err(format!("virtual model '{}' is not allowed for application '{}'", vm.key, application.key));
+            if !application
+                .allowed_virtual_models
+                .iter()
+                .any(|k| k == &vm.key)
+            {
+                return Err(format!(
+                    "virtual model '{}' is not allowed for application '{}'",
+                    vm.key, application.key
+                ));
             }
         }
         Ok(())

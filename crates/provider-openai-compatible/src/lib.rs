@@ -5,14 +5,15 @@ use std::time::{Duration, Instant};
 
 use aihub_api_types::gateway as wire;
 use aihub_domain::canonical::{
-    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest, CanonicalEmbeddingResponse,
-    CanonicalUsage, DiscoveredModel, StreamEvent, ToolCallOutput, ToolDefinitionData, ToolChoice,
-    UsageSource,
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest,
+    CanonicalEmbeddingResponse, CanonicalUsage, DiscoveredModel, StreamEvent, ToolCallOutput,
+    ToolChoice, ToolDefinitionData, UsageSource,
 };
 use aihub_domain::entities::ProviderKind;
 use aihub_domain::error::ErrorCategory;
 use aihub_provider_core::{
-    ProviderError, ProviderFactory, ProviderHealth, ProviderResult, ProviderRuntimeConfig, ProviderStream,
+    ProviderError, ProviderFactory, ProviderHealth, ProviderResult, ProviderRuntimeConfig,
+    ProviderStream,
 };
 use aihub_secrets::SecretValue;
 use async_trait::async_trait;
@@ -27,7 +28,10 @@ impl ProviderFactory for OpenAICompatibleFactory {
         "openai_compatible"
     }
 
-    fn build(&self, config: ProviderRuntimeConfig) -> ProviderResult<std::sync::Arc<dyn aihub_provider_core::ModelProvider>> {
+    fn build(
+        &self,
+        config: ProviderRuntimeConfig,
+    ) -> ProviderResult<std::sync::Arc<dyn aihub_provider_core::ModelProvider>> {
         Ok(std::sync::Arc::new(OpenAICompatibleProvider::new(config)))
     }
 }
@@ -56,7 +60,11 @@ impl OpenAICompatibleProvider {
         let http = builder.build().unwrap_or_default();
 
         let mut extra_headers = Vec::new();
-        if let Some(headers) = config.config.get("extraHeaders").and_then(|v| v.as_object()) {
+        if let Some(headers) = config
+            .config
+            .get("extraHeaders")
+            .and_then(|v| v.as_object())
+        {
             for (k, v) in headers {
                 if let Some(val) = v.as_str() {
                     extra_headers.push((k.clone(), val.to_string()));
@@ -123,11 +131,20 @@ impl OpenAICompatibleProvider {
 
     fn transport_error(err: reqwest::Error) -> ProviderError {
         if err.is_timeout() {
-            ProviderError::new(ErrorCategory::Timeout, format!("provider request timeout: {err}"))
+            ProviderError::new(
+                ErrorCategory::Timeout,
+                format!("provider request timeout: {err}"),
+            )
         } else if err.is_connect() {
-            ProviderError::new(ErrorCategory::Connection, format!("provider connection failed: {err}"))
+            ProviderError::new(
+                ErrorCategory::Connection,
+                format!("provider connection failed: {err}"),
+            )
         } else {
-            ProviderError::new(ErrorCategory::Connection, format!("provider request failed: {err}"))
+            ProviderError::new(
+                ErrorCategory::Connection,
+                format!("provider request failed: {err}"),
+            )
         }
     }
 
@@ -165,20 +182,26 @@ impl OpenAICompatibleProvider {
             }).collect::<Vec<_>>(),
         });
         if !request.tools.is_empty() {
-            body["tools"] = json!(request.tools.iter().map(|t| json!({
-                "type": "function",
-                "function": {
-                    "name": t.name,
-                    "description": t.description,
-                    "parameters": t.parameters.clone().unwrap_or(json!({})),
-                }
-            })).collect::<Vec<_>>());
+            body["tools"] = json!(request
+                .tools
+                .iter()
+                .map(|t| json!({
+                    "type": "function",
+                    "function": {
+                        "name": t.name,
+                        "description": t.description,
+                        "parameters": t.parameters.clone().unwrap_or(json!({})),
+                    }
+                }))
+                .collect::<Vec<_>>());
             if let Some(choice) = &request.tool_choice {
                 body["tool_choice"] = match choice {
                     ToolChoice::Auto => json!("auto"),
                     ToolChoice::None => json!("none"),
                     ToolChoice::Required => json!("required"),
-                    ToolChoice::Function(name) => json!({"type": "function", "function": {"name": name}}),
+                    ToolChoice::Function(name) => {
+                        json!({"type": "function", "function": {"name": name}})
+                    }
                 };
             }
         }
@@ -226,8 +249,7 @@ impl OpenAICompatibleProvider {
             content: message
                 .and_then(|m| m.content.as_ref())
                 .and_then(|v| v.as_str().map(|s| s.to_string())),
-            reasoning_content: message
-                .and_then(|m| m.reasoning_content.clone()),
+            reasoning_content: message.and_then(|m| m.reasoning_content.clone()),
             tool_calls,
             finish_reason: choice.and_then(|c| c.finish_reason.clone()),
             usage: Self::map_usage(resp.usage.as_ref()),
@@ -274,10 +296,12 @@ impl aihub_provider_core::ModelProvider for OpenAICompatibleProvider {
             let body = response.text().await.unwrap_or_default();
             return Err(self.map_status_error(status, body).await);
         }
-        let parsed: wire::ModelListResponse =
-            response.json().await.map_err(|e| {
-                ProviderError::new(ErrorCategory::MalformedResponse, format!("invalid /models response: {e}"))
-            })?;
+        let parsed: wire::ModelListResponse = response.json().await.map_err(|e| {
+            ProviderError::new(
+                ErrorCategory::MalformedResponse,
+                format!("invalid /models response: {e}"),
+            )
+        })?;
         Ok(parsed
             .data
             .into_iter()
@@ -301,10 +325,7 @@ impl aihub_provider_core::ModelProvider for OpenAICompatibleProvider {
             .collect())
     }
 
-    async fn chat(
-        &self,
-        request: CanonicalChatRequest,
-    ) -> ProviderResult<CanonicalChatResponse> {
+    async fn chat(&self, request: CanonicalChatRequest) -> ProviderResult<CanonicalChatResponse> {
         let body = self.build_chat_body(&request, false);
         let response = self
             .auth_request(reqwest::Method::POST, self.url("/chat/completions"))
@@ -318,7 +339,10 @@ impl aihub_provider_core::ModelProvider for OpenAICompatibleProvider {
             return Err(self.map_status_error(status, text).await);
         }
         let parsed: wire::ChatCompletionResponse = response.json().await.map_err(|e| {
-            ProviderError::new(ErrorCategory::MalformedResponse, format!("invalid chat response: {e}"))
+            ProviderError::new(
+                ErrorCategory::MalformedResponse,
+                format!("invalid chat response: {e}"),
+            )
         })?;
         Ok(Self::response_to_canonical(parsed))
     }
@@ -452,12 +476,19 @@ impl aihub_provider_core::ModelProvider for OpenAICompatibleProvider {
             return Err(self.map_status_error(status, text).await);
         }
         let parsed: wire::EmbeddingResponse = response.json().await.map_err(|e| {
-            ProviderError::new(ErrorCategory::MalformedResponse, format!("invalid embeddings response: {e}"))
+            ProviderError::new(
+                ErrorCategory::MalformedResponse,
+                format!("invalid embeddings response: {e}"),
+            )
         })?;
         let mut embeddings = Vec::new();
         for item in &parsed.data {
             if let Some(vec) = item.embedding.as_array() {
-                embeddings.push(vec.iter().filter_map(|v| v.as_f64().map(|f| f as f32)).collect());
+                embeddings.push(
+                    vec.iter()
+                        .filter_map(|v| v.as_f64().map(|f| f as f32))
+                        .collect(),
+                );
             }
         }
         Ok(CanonicalEmbeddingResponse {
@@ -507,7 +538,11 @@ impl aihub_provider_core::ModelProvider for OpenAICompatibleProvider {
                 }
             }
             Err(e) => {
-                let category = if e.is_timeout() { ErrorCategory::Timeout } else { ErrorCategory::Connection };
+                let category = if e.is_timeout() {
+                    ErrorCategory::Timeout
+                } else {
+                    ErrorCategory::Connection
+                };
                 Ok(ProviderHealth {
                     status: "unavailable".into(),
                     latency_ms: Some(started.elapsed().as_millis() as i64),

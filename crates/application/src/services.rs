@@ -21,7 +21,13 @@ fn now() -> chrono::DateTime<chrono::Utc> {
     chrono::Utc::now()
 }
 
-async fn audit(repos: &Repos, event_type: &str, resource: &str, resource_id: &str, metadata: serde_json::Value) {
+async fn audit(
+    repos: &Repos,
+    event_type: &str,
+    resource: &str,
+    resource_id: &str,
+    metadata: serde_json::Value,
+) {
     let event = AuditEvent {
         id: uuid::Uuid::new_v4().to_string(),
         trace_id: None,
@@ -47,7 +53,11 @@ pub struct ProviderService {
 }
 
 impl ProviderService {
-    pub fn new(repos: Repos, registry: Arc<ProviderRegistry>, secrets: Arc<dyn SecretStore>) -> Self {
+    pub fn new(
+        repos: Repos,
+        registry: Arc<ProviderRegistry>,
+        secrets: Arc<dyn SecretStore>,
+    ) -> Self {
         Self {
             repos,
             registry,
@@ -81,7 +91,10 @@ impl ProviderService {
 
     pub async fn create(&self, request: CreateProviderRequest) -> Result<ProviderDto, DomainError> {
         if request.key.trim().is_empty() {
-            return Err(DomainError::validation(DomainResource::Provider, "key is required"));
+            return Err(DomainError::validation(
+                DomainResource::Provider,
+                "key is required",
+            ));
         }
         let Some(kind) = ProviderKind::parse(&request.kind) else {
             return Err(DomainError::validation(
@@ -89,18 +102,19 @@ impl ProviderService {
                 format!("unknown provider kind '{}'", request.kind),
             ));
         };
-        if !self
-            .registry
-            .supported_protocols()
-            .contains(&match kind {
-                ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => "openai_compatible",
-                ProviderKind::Anthropic => "anthropic",
-                ProviderKind::Gemini => "gemini",
-            })
-        {
+        if !self.registry.supported_protocols().contains(&match kind {
+            ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => {
+                "openai_compatible"
+            }
+            ProviderKind::Anthropic => "anthropic",
+            ProviderKind::Gemini => "gemini",
+        }) {
             return Err(DomainError::validation(
                 DomainResource::Provider,
-                format!("provider kind '{}' has no adapter registered yet", request.kind),
+                format!(
+                    "provider kind '{}' has no adapter registered yet",
+                    request.kind
+                ),
             ));
         }
         let provider = self
@@ -115,7 +129,11 @@ impl ProviderService {
                 timeout_ms: request.timeout_ms.unwrap_or(120_000),
                 max_retries: request.max_retries.unwrap_or(2),
                 enabled: request.enabled,
-                status: if request.enabled { "active".into() } else { "disabled".into() },
+                status: if request.enabled {
+                    "active".into()
+                } else {
+                    "disabled".into()
+                },
                 config: request.config.clone(),
             })
             .await?;
@@ -123,9 +141,17 @@ impl ProviderService {
         if let Some(api_key) = &request.api_key {
             if !api_key.is_empty() {
                 self.secrets
-                    .set(&SecretRef(provider.credential_ref.clone().unwrap_or_default()), aihub_secrets::SecretValue::new(api_key))
+                    .set(
+                        &SecretRef(provider.credential_ref.clone().unwrap_or_default()),
+                        aihub_secrets::SecretValue::new(api_key),
+                    )
                     .await
-                    .map_err(|e| DomainError::internal(DomainResource::Provider, format!("secret store write failed: {e}")))?;
+                    .map_err(|e| {
+                        DomainError::internal(
+                            DomainResource::Provider,
+                            format!("secret store write failed: {e}"),
+                        )
+                    })?;
                 self.repos
                     .providers
                     .update(
@@ -139,12 +165,23 @@ impl ProviderService {
             }
         }
         self.registry.invalidate(&provider.id).await;
-        audit(&self.repos, "provider.created", "provider", &provider.id, json!({"key": provider.key})).await;
+        audit(
+            &self.repos,
+            "provider.created",
+            "provider",
+            &provider.id,
+            json!({"key": provider.key}),
+        )
+        .await;
         let count = self.repos.models.count_by_provider(&provider.id).await?;
         Ok(self.dto(&provider, count).await)
     }
 
-    pub async fn update(&self, id: &str, request: UpdateProviderRequest) -> Result<ProviderDto, DomainError> {
+    pub async fn update(
+        &self,
+        id: &str,
+        request: UpdateProviderRequest,
+    ) -> Result<ProviderDto, DomainError> {
         let existing = self.repos.providers.get(id).await?;
         let update = ProviderUpdate {
             name: request.name,
@@ -154,11 +191,17 @@ impl ProviderService {
             timeout_ms: request.timeout_ms,
             max_retries: request.max_retries,
             enabled: request.enabled,
-            status: request.enabled.map(|enabled| if enabled { "active" } else { "disabled" }.to_string()),
+            status: request
+                .enabled
+                .map(|enabled| if enabled { "active" } else { "disabled" }.to_string()),
             config: request.config,
             credential_ref: None,
         };
-        let credential_rotated = request.api_key.as_ref().map(|k| !k.is_empty()).unwrap_or(false);
+        let credential_rotated = request
+            .api_key
+            .as_ref()
+            .map(|k| !k.is_empty())
+            .unwrap_or(false);
         let provider = self.repos.providers.update(id, update).await?;
         if let Some(api_key) = &request.api_key {
             if !api_key.is_empty() {
@@ -168,7 +211,12 @@ impl ProviderService {
                         aihub_secrets::SecretValue::new(api_key),
                     )
                     .await
-                    .map_err(|e| DomainError::internal(DomainResource::Provider, format!("secret store write failed: {e}")))?;
+                    .map_err(|e| {
+                        DomainError::internal(
+                            DomainResource::Provider,
+                            format!("secret store write failed: {e}"),
+                        )
+                    })?;
                 self.repos
                     .providers
                     .update(
@@ -185,7 +233,14 @@ impl ProviderService {
             self.registry.invalidate(id).await;
         }
         self.registry.invalidate(id).await;
-        audit(&self.repos, "provider.updated", "provider", id, json!({"key": existing.key})).await;
+        audit(
+            &self.repos,
+            "provider.updated",
+            "provider",
+            id,
+            json!({"key": existing.key}),
+        )
+        .await;
         let count = self.repos.models.count_by_provider(id).await?;
         Ok(self.dto(&provider, count).await)
     }
@@ -205,7 +260,14 @@ impl ProviderService {
             let _ = self.secrets.delete(&SecretRef(reference.clone())).await;
         }
         self.registry.invalidate(id).await;
-        audit(&self.repos, "provider.deleted", "provider", id, json!({"key": provider.key})).await;
+        audit(
+            &self.repos,
+            "provider.deleted",
+            "provider",
+            id,
+            json!({"key": provider.key}),
+        )
+        .await;
         Ok(())
     }
 
@@ -240,22 +302,42 @@ impl ProviderService {
                 h.message.clone(),
                 h.error_category.map(|c| c.as_str().to_string()),
             ),
-            Err(e) => (false, e.http_status, Some(e.message.clone()), Some(e.category.as_str().to_string())),
+            Err(e) => (
+                false,
+                e.http_status,
+                Some(e.message.clone()),
+                Some(e.category.as_str().to_string()),
+            ),
         };
-        let _ = self.repos.provider_health.insert_sample(NewHealthSample {
-            provider_id: id.to_string(),
-            model_id: None,
-            status: if ok { "healthy".into() } else { "unavailable".into() },
-            latency_ms: Some(latency),
-            http_status: status.map(|s| s as i64),
-            error_category: category,
-        });
+        let _ = self
+            .repos
+            .provider_health
+            .insert_sample(NewHealthSample {
+                provider_id: id.to_string(),
+                model_id: None,
+                status: if ok {
+                    "healthy".into()
+                } else {
+                    "unavailable".into()
+                },
+                latency_ms: Some(latency),
+                http_status: status.map(|s| s as i64),
+                error_category: category,
+            })
+            .await;
         let _ = self
             .repos
             .providers
             .set_health(id, if ok { "healthy" } else { "unavailable" }, now())
             .await;
-        audit(&self.repos, "provider.tested", "provider", id, json!({"ok": ok})).await;
+        audit(
+            &self.repos,
+            "provider.tested",
+            "provider",
+            id,
+            json!({"ok": ok}),
+        )
+        .await;
 
         Ok(TestConnectionResult {
             ok,
@@ -270,7 +352,10 @@ impl ProviderService {
         let provider = self.repos.providers.get(id).await?;
         let adapter = self.registry.get_for(&provider).await?;
         let discovered = adapter.list_models().await.map_err(|e| {
-            DomainError::internal(DomainResource::Provider, format!("model discovery failed: {}", e.message))
+            DomainError::internal(
+                DomainResource::Provider,
+                format!("model discovery failed: {}", e.message),
+            )
         })?;
         let mut created = 0usize;
         let mut updated = 0usize;
@@ -297,7 +382,9 @@ impl ProviderService {
                 .upsert_discovered(NewModel {
                     provider_id: id.to_string(),
                     model_key: model.model_key.clone(),
-                    display_name: model.display_name.unwrap_or_else(|| model.model_key.clone()),
+                    display_name: model
+                        .display_name
+                        .unwrap_or_else(|| model.model_key.clone()),
                     model_type,
                     context_window: model.context_window,
                     max_output_tokens: None,
@@ -320,7 +407,14 @@ impl ProviderService {
                 Err(_) => { /* 已存在且 upsert 冲突：跳过 */ }
             }
         }
-        audit(&self.repos, "provider.models_discovered", "provider", id, json!({"created": created, "updated": updated})).await;
+        audit(
+            &self.repos,
+            "provider.models_discovered",
+            "provider",
+            id,
+            json!({"created": created, "updated": updated}),
+        )
+        .await;
         Ok(DiscoverModelsResult {
             discovered: dtos.len(),
             created,
@@ -332,11 +426,17 @@ impl ProviderService {
 
 // ================= Model =================
 
-pub fn model_dto(model: &Model, provider: Option<&Provider>, provider_key: Option<&str>) -> ModelDto {
+pub fn model_dto(
+    model: &Model,
+    provider: Option<&Provider>,
+    provider_key: Option<&str>,
+) -> ModelDto {
     ModelDto {
         id: model.id.clone(),
         provider_id: model.provider_id.clone(),
-        provider_key: provider.map(|p| p.key.clone()).or_else(|| provider_key.map(|s| s.to_string())),
+        provider_key: provider
+            .map(|p| p.key.clone())
+            .or_else(|| provider_key.map(|s| s.to_string())),
         provider_name: provider.map(|p| p.name.clone()),
         model_key: model.model_key.clone(),
         display_name: model.display_name.clone(),
@@ -365,7 +465,10 @@ impl ModelService {
     pub async fn create(&self, request: CreateModelRequest) -> Result<ModelDto, DomainError> {
         let provider = self.repos.providers.get(&request.provider_id).await?;
         let Some(model_type) = ModelType::parse(&request.model_type) else {
-            return Err(DomainError::validation(DomainResource::Model, format!("unknown model type '{}'", request.model_type)));
+            return Err(DomainError::validation(
+                DomainResource::Model,
+                format!("unknown model type '{}'", request.model_type),
+            ));
         };
         let model = self
             .repos
@@ -388,18 +491,31 @@ impl ModelService {
                 metadata: json!({}),
             })
             .await?;
-        audit(&self.repos, "model.created", "model", &model.id, json!({"key": model.model_key})).await;
+        audit(
+            &self.repos,
+            "model.created",
+            "model",
+            &model.id,
+            json!({"key": model.model_key}),
+        )
+        .await;
         Ok(model_dto(&model, Some(&provider), None))
     }
 
-    pub async fn update(&self, id: &str, request: UpdateModelRequest) -> Result<ModelDto, DomainError> {
+    pub async fn update(
+        &self,
+        id: &str,
+        request: UpdateModelRequest,
+    ) -> Result<ModelDto, DomainError> {
         let model_type = request.model_type.as_deref().and_then(ModelType::parse);
         let pricing = request
             .pricing
             .as_ref()
             .map(|p| serde_json::from_value::<Pricing>(p.clone()))
             .transpose()
-            .map_err(|e| DomainError::validation(DomainResource::Model, format!("invalid pricing: {e}")))?;
+            .map_err(|e| {
+                DomainError::validation(DomainResource::Model, format!("invalid pricing: {e}"))
+            })?;
         let model = self
             .repos
             .models
@@ -408,8 +524,8 @@ impl ModelService {
                 ModelUpdate {
                     display_name: request.display_name,
                     model_type,
-                    context_window: request.context_window.map(|v| Some(v)),
-                    max_output_tokens: request.max_output_tokens.map(|v| Some(v)),
+                    context_window: request.context_window.map(Some),
+                    max_output_tokens: request.max_output_tokens.map(Some),
                     capabilities: request.capabilities,
                     pricing,
                     enabled: request.enabled,
@@ -524,12 +640,19 @@ impl VirtualModelService {
         Ok(())
     }
 
-    pub async fn create(&self, request: CreateVirtualModelRequest) -> Result<VirtualModelDto, DomainError> {
+    pub async fn create(
+        &self,
+        request: CreateVirtualModelRequest,
+    ) -> Result<VirtualModelDto, DomainError> {
         if request.key.trim().is_empty() {
-            return Err(DomainError::validation(DomainResource::VirtualModel, "key is required"));
+            return Err(DomainError::validation(
+                DomainResource::VirtualModel,
+                "key is required",
+            ));
         }
         self.validate_targets(&request.targets).await?;
-        let routing = RoutingStrategy::parse(&request.routing_strategy).unwrap_or(RoutingStrategy::PriorityFailover);
+        let routing = RoutingStrategy::parse(&request.routing_strategy)
+            .unwrap_or(RoutingStrategy::PriorityFailover);
         let vm = self
             .repos
             .virtual_models
@@ -556,13 +679,27 @@ impl VirtualModelService {
                     .collect(),
             )
             .await?;
-        audit(&self.repos, "virtual_model.created", "virtual_model", &vm.id, json!({"key": vm.key})).await;
+        audit(
+            &self.repos,
+            "virtual_model.created",
+            "virtual_model",
+            &vm.id,
+            json!({"key": vm.key}),
+        )
+        .await;
         self.dto(&vm).await
     }
 
-    pub async fn update(&self, id: &str, request: UpdateVirtualModelRequest) -> Result<VirtualModelDto, DomainError> {
+    pub async fn update(
+        &self,
+        id: &str,
+        request: UpdateVirtualModelRequest,
+    ) -> Result<VirtualModelDto, DomainError> {
         let id = &self.resolve_id(id).await?;
-        let routing = request.routing_strategy.as_deref().and_then(RoutingStrategy::parse);
+        let routing = request
+            .routing_strategy
+            .as_deref()
+            .and_then(RoutingStrategy::parse);
         let vm = self
             .repos
             .virtual_models
@@ -570,18 +707,29 @@ impl VirtualModelService {
                 id,
                 VirtualModelUpdate {
                     name: request.name,
-                    description: request.description.map(|d| Some(d)),
+                    description: request.description.map(Some),
                     routing_strategy: routing,
                     enabled: request.enabled,
                     config: request.config,
                 },
             )
             .await?;
-        audit(&self.repos, "virtual_model.updated", "virtual_model", id, json!({})).await;
+        audit(
+            &self.repos,
+            "virtual_model.updated",
+            "virtual_model",
+            id,
+            json!({}),
+        )
+        .await;
         self.dto(&vm).await
     }
 
-    pub async fn replace_targets(&self, id: &str, request: ReplaceTargetsRequest) -> Result<VirtualModelDto, DomainError> {
+    pub async fn replace_targets(
+        &self,
+        id: &str,
+        request: ReplaceTargetsRequest,
+    ) -> Result<VirtualModelDto, DomainError> {
         let id = &self.resolve_id(id).await?;
         self.validate_targets(&request.targets).await?;
         self.repos
@@ -608,7 +756,14 @@ impl VirtualModelService {
     pub async fn delete(&self, id: &str) -> Result<(), DomainError> {
         let id = self.resolve_id(id).await?;
         self.repos.virtual_models.delete(&id).await?;
-        audit(&self.repos, "virtual_model.deleted", "virtual_model", &id, json!({})).await;
+        audit(
+            &self.repos,
+            "virtual_model.deleted",
+            "virtual_model",
+            &id,
+            json!({}),
+        )
+        .await;
         Ok(())
     }
 
@@ -706,7 +861,10 @@ fn quota_values(input: &QuotaInput) -> QuotaValues {
         daily_requests: input.daily_requests,
         monthly_tokens: input.monthly_tokens,
         monthly_cost_microunits: input.monthly_cost_microunits,
-        exceed_action: input.exceed_action.clone().unwrap_or_else(|| "block".to_string()),
+        exceed_action: input
+            .exceed_action
+            .clone()
+            .unwrap_or_else(|| "block".to_string()),
     }
 }
 
@@ -735,7 +893,11 @@ impl ApplicationService {
     }
 
     async fn dto(&self, app: &Application) -> Result<ApplicationDto, DomainError> {
-        let quota = self.repos.quota.get_for_subject("application", &app.id).await?;
+        let quota = self
+            .repos
+            .quota
+            .get_for_subject("application", &app.id)
+            .await?;
         let key_count = self.repos.api_keys.count_by_application(&app.id).await?;
         Ok(ApplicationDto {
             id: app.id.clone(),
@@ -753,9 +915,15 @@ impl ApplicationService {
         })
     }
 
-    pub async fn create(&self, request: CreateApplicationRequest) -> Result<ApplicationDto, DomainError> {
+    pub async fn create(
+        &self,
+        request: CreateApplicationRequest,
+    ) -> Result<ApplicationDto, DomainError> {
         if request.key.trim().is_empty() {
-            return Err(DomainError::validation(DomainResource::Application, "key is required"));
+            return Err(DomainError::validation(
+                DomainResource::Application,
+                "key is required",
+            ));
         }
         let app = self
             .repos
@@ -776,11 +944,22 @@ impl ApplicationService {
                 .upsert_for_subject("application", &app.id, quota_values(quota))
                 .await?;
         }
-        audit(&self.repos, "application.created", "application", &app.id, json!({"key": app.key})).await;
+        audit(
+            &self.repos,
+            "application.created",
+            "application",
+            &app.id,
+            json!({"key": app.key}),
+        )
+        .await;
         self.dto(&app).await
     }
 
-    pub async fn update(&self, id: &str, request: UpdateApplicationRequest) -> Result<ApplicationDto, DomainError> {
+    pub async fn update(
+        &self,
+        id: &str,
+        request: UpdateApplicationRequest,
+    ) -> Result<ApplicationDto, DomainError> {
         let app = self
             .repos
             .applications
@@ -802,13 +981,27 @@ impl ApplicationService {
                 .upsert_for_subject("application", id, quota_values(quota))
                 .await?;
         }
-        audit(&self.repos, "application.updated", "application", id, json!({})).await;
+        audit(
+            &self.repos,
+            "application.updated",
+            "application",
+            id,
+            json!({}),
+        )
+        .await;
         self.dto(&app).await
     }
 
     pub async fn delete(&self, id: &str) -> Result<(), DomainError> {
         self.repos.applications.delete(id).await?;
-        audit(&self.repos, "application.deleted", "application", id, json!({})).await;
+        audit(
+            &self.repos,
+            "application.deleted",
+            "application",
+            id,
+            json!({}),
+        )
+        .await;
         Ok(())
     }
 
@@ -827,7 +1020,11 @@ impl ApplicationService {
     }
 
     /// 创建 API Key：明文仅此一次返回（§9.7/§22.6）。
-    pub async fn create_key(&self, application_id: &str, request: CreateApiKeyRequest) -> Result<CreateApiKeyResponse, DomainError> {
+    pub async fn create_key(
+        &self,
+        application_id: &str,
+        request: CreateApiKeyRequest,
+    ) -> Result<CreateApiKeyResponse, DomainError> {
         let app = self.repos.applications.get(application_id).await?;
         let (plaintext, prefix) = apikey::generate_key(apikey::KeyEnvironment::Live);
         let key = self
@@ -860,7 +1057,11 @@ impl ApplicationService {
     }
 
     pub async fn list_keys(&self, application_id: &str) -> Result<Vec<ApiKeyDto>, DomainError> {
-        let keys = self.repos.api_keys.list_by_application(application_id).await?;
+        let keys = self
+            .repos
+            .api_keys
+            .list_by_application(application_id)
+            .await?;
         Ok(keys.iter().map(key_dto).collect())
     }
 
@@ -879,6 +1080,7 @@ impl ApplicationService {
 
 pub struct QueryService {
     repos: Repos,
+    #[allow(dead_code)] // Request Detail 后续展示路由来源
     resolver: Arc<ModelResolver>,
 }
 
@@ -911,14 +1113,34 @@ impl QueryService {
         let providers = self.repos.providers.list(false).await?;
         let mut items = Vec::new();
         for request in &requests {
-            let provider_key = request
-                .provider_id
-                .as_ref()
-                .and_then(|pid| providers.iter().find(|p| &p.id == pid).map(|p| p.key.clone()));
-            let usage = self.repos.requests.usage_for_request(&request.id).await.ok().flatten();
-            let cost = self.repos.requests.cost_for_request(&request.id).await.ok().flatten();
+            let provider_key = request.provider_id.as_ref().and_then(|pid| {
+                providers
+                    .iter()
+                    .find(|p| &p.id == pid)
+                    .map(|p| p.key.clone())
+            });
+            let usage = self
+                .repos
+                .requests
+                .usage_for_request(&request.id)
+                .await
+                .ok()
+                .flatten();
+            let cost = self
+                .repos
+                .requests
+                .cost_for_request(&request.id)
+                .await
+                .ok()
+                .flatten();
             let application_key = match &request.application_id {
-                Some(app_id) => self.repos.applications.get(app_id).await.ok().map(|a| a.key),
+                Some(app_id) => self
+                    .repos
+                    .applications
+                    .get(app_id)
+                    .await
+                    .ok()
+                    .map(|a| a.key),
                 None => None,
             };
             items.push(RequestListItem {
@@ -960,7 +1182,13 @@ impl QueryService {
             None => None,
         };
         let application_key = match &request.application_id {
-            Some(app_id) => self.repos.applications.get(app_id).await.ok().map(|a| a.key),
+            Some(app_id) => self
+                .repos
+                .applications
+                .get(app_id)
+                .await
+                .ok()
+                .map(|a| a.key),
             None => None,
         };
         Ok(RequestDetail {

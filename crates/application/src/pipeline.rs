@@ -5,7 +5,9 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use aihub_domain::canonical::{CanonicalChatRequest, CanonicalChatResponse, CanonicalUsage, StreamEvent, UsageSource};
+use aihub_domain::canonical::{
+    CanonicalChatRequest, CanonicalChatResponse, CanonicalUsage, StreamEvent, UsageSource,
+};
 use aihub_domain::cost;
 use aihub_domain::entities::{Application, Model, RequestStatus};
 use aihub_domain::repos::{NewAiRequest, RequestFinish};
@@ -174,7 +176,10 @@ impl ChatPipeline {
     /// Bearer Application API Key 认证。撤销/过期的 Key 立即拒绝（§43.1）。
     pub async fn authenticate_key(&self, bearer: &str) -> Result<AuthContext, PipelineError> {
         let Some(prefix) = apikey::key_prefix(bearer) else {
-            return Err(PipelineError::new(GatewayCode::Unauthorized, "invalid api key format"));
+            return Err(PipelineError::new(
+                GatewayCode::Unauthorized,
+                "invalid api key format",
+            ));
         };
         let key = self
             .repos
@@ -185,10 +190,16 @@ impl ChatPipeline {
             .ok_or_else(|| PipelineError::new(GatewayCode::Unauthorized, "unknown api key"))?;
 
         if !apikey::verify_hash(bearer, &key.secret_hash) {
-            return Err(PipelineError::new(GatewayCode::Unauthorized, "api key verification failed"));
+            return Err(PipelineError::new(
+                GatewayCode::Unauthorized,
+                "api key verification failed",
+            ));
         }
         if !key.is_active(chrono::Utc::now()) {
-            return Err(PipelineError::new(GatewayCode::Unauthorized, "api key is revoked or expired"));
+            return Err(PipelineError::new(
+                GatewayCode::Unauthorized,
+                "api key is revoked or expired",
+            ));
         }
 
         let application = self
@@ -198,14 +209,20 @@ impl ChatPipeline {
             .await
             .map_err(|e| PipelineError::from_domain(&e))?;
         if application.status != "active" {
-            return Err(PipelineError::new(GatewayCode::Forbidden, "application is not active"));
+            return Err(PipelineError::new(
+                GatewayCode::Forbidden,
+                "application is not active",
+            ));
         }
 
         let key_id = key.id.clone();
         let repos = self.repos.clone();
         // last_used_at 异步补写，不阻塞请求路径
         tokio::spawn(async move {
-            let _ = repos.api_keys.touch_last_used(&key_id, chrono::Utc::now()).await;
+            let _ = repos
+                .api_keys
+                .touch_last_used(&key_id, chrono::Utc::now())
+                .await;
         });
 
         Ok(AuthContext {
@@ -244,7 +261,10 @@ impl ChatPipeline {
                 ));
             }
             LimiterDecision::DailyQuotaExceeded => {
-                return Err(PipelineError::new(GatewayCode::QuotaExceeded, "daily request quota exceeded"));
+                return Err(PipelineError::new(
+                    GatewayCode::QuotaExceeded,
+                    "daily request quota exceeded",
+                ));
             }
         }
         if let Some(policy) = &quota {
@@ -257,7 +277,10 @@ impl ChatPipeline {
                     .map_err(|e| PipelineError::from_domain(&e))?;
                 if spent >= policy.monthly_cost_microunits.unwrap_or(0) {
                     self.limiter.refund(&ctx.application.id).await;
-                    return Err(PipelineError::new(GatewayCode::QuotaExceeded, "monthly cost quota exceeded"));
+                    return Err(PipelineError::new(
+                        GatewayCode::QuotaExceeded,
+                        "monthly cost quota exceeded",
+                    ));
                 }
             }
         }
@@ -272,7 +295,10 @@ impl ChatPipeline {
                     .map_err(|e| PipelineError::from_domain(&e))?;
                 if spent >= budget {
                     self.limiter.refund(&ctx.application.id).await;
-                    return Err(PipelineError::new(GatewayCode::QuotaExceeded, "monthly budget exceeded"));
+                    return Err(PipelineError::new(
+                        GatewayCode::QuotaExceeded,
+                        "monthly budget exceeded",
+                    ));
                 }
             }
         }
@@ -362,7 +388,9 @@ impl ChatPipeline {
                 ));
                 continue;
             }
-            let attempts = prepared.retry_config.attempts(candidate.provider.max_retries);
+            let attempts = prepared
+                .retry_config
+                .attempts(candidate.provider.max_retries);
             for attempt in 0..attempts {
                 let provider = match self.registry.get_for(&candidate.provider).await {
                     Ok(p) => p,
@@ -404,8 +432,9 @@ impl ChatPipeline {
         }
 
         let Some((candidate, response)) = succeeded else {
-            let error = last_error
-                .unwrap_or_else(|| PipelineError::new(GatewayCode::RouteNotFound, "no candidate executed"));
+            let error = last_error.unwrap_or_else(|| {
+                PipelineError::new(GatewayCode::RouteNotFound, "no candidate executed")
+            });
             self.persist_failure(&prepared, error.code, &error.message, retry_count, started)
                 .await;
             return Err(error);
@@ -518,7 +547,10 @@ impl ChatPipeline {
                     let mut output_chars: usize = 0;
                     let mut usage: Option<CanonicalUsage> = None;
                     let mut finish_reason: Option<String> = None;
-                    let mut mid_stream_error: Option<(aihub_domain::error::ErrorCategory, PipelineError)> = None;
+                    let mut mid_stream_error: Option<(
+                        aihub_domain::error::ErrorCategory,
+                        PipelineError,
+                    )> = None;
 
                     if tx
                         .send(PipelineStreamEvent::Started {
@@ -573,7 +605,10 @@ impl ChatPipeline {
                                 http_status,
                             } => {
                                 breakers
-                                    .record_failure(&candidate.provider.id, &candidate.model.model_key)
+                                    .record_failure(
+                                        &candidate.provider.id,
+                                        &candidate.model.model_key,
+                                    )
                                     .await;
                                 let err = aihub_provider_core::ProviderError {
                                     category,
@@ -633,8 +668,8 @@ impl ChatPipeline {
                         .await;
                     let latency_ms = started.elapsed().as_millis() as i64;
                     let ttft = ttft_ms.unwrap_or(latency_ms);
-                    let final_usage =
-                        usage.unwrap_or_else(|| estimate_usage_chars(&request_for_stream, output_chars));
+                    let final_usage = usage
+                        .unwrap_or_else(|| estimate_usage_chars(&request_for_stream, output_chars));
                     let usage_cost = build_usage_cost(&candidate.model, final_usage);
                     persist_stream_success(
                         &repos,
@@ -672,8 +707,9 @@ impl ChatPipeline {
                 return;
             }
 
-            let error = last_error
-                .unwrap_or_else(|| PipelineError::new(GatewayCode::RouteNotFound, "no candidate executed"));
+            let error = last_error.unwrap_or_else(|| {
+                PipelineError::new(GatewayCode::RouteNotFound, "no candidate executed")
+            });
             persist_stream_failure(
                 &repos,
                 &request_id,
@@ -918,7 +954,13 @@ async fn persist_client_cancelled(repos: &Repos, request_id: &str, message: Opti
             },
         )
         .await;
-    emit_audit(repos, &format!("stream-{request_id}"), "request.client_cancelled", None).await;
+    emit_audit(
+        repos,
+        &format!("stream-{request_id}"),
+        "request.client_cancelled",
+        None,
+    )
+    .await;
 }
 
 async fn persist_usage_cost(repos: &Repos, request_id: &str, usage_cost: &UsageCost) {
@@ -957,7 +999,12 @@ async fn persist_usage_cost(repos: &Repos, request_id: &str, usage_cost: &UsageC
     }
 }
 
-async fn emit_audit(repos: &Repos, trace_id: &str, event_type: &str, metadata: Option<serde_json::Value>) {
+async fn emit_audit(
+    repos: &Repos,
+    trace_id: &str,
+    event_type: &str,
+    metadata: Option<serde_json::Value>,
+) {
     let event = aihub_domain::entities::AuditEvent {
         id: uuid::Uuid::new_v4().to_string(),
         trace_id: Some(trace_id.to_string()),
@@ -990,7 +1037,11 @@ fn build_usage_cost(model: &Model, usage: CanonicalUsage) -> UsageCost {
 
 /// 输入 token 估算（chars/4）。仅在 Provider 未返回 usage 时使用，必须标记 estimated（§12.5）。
 fn estimate_usage(request: &CanonicalChatRequest, output_chars: usize) -> CanonicalUsage {
-    let input_chars: usize = request.messages.iter().map(|m| m.content.chars().count()).sum();
+    let input_chars: usize = request
+        .messages
+        .iter()
+        .map(|m| m.content.chars().count())
+        .sum();
     let input_tokens = (input_chars / 4).max(1) as i64;
     let output_tokens = (output_chars / 4).max(1) as i64;
     CanonicalUsage {

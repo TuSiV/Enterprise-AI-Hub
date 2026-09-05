@@ -101,13 +101,23 @@ impl ApplicationRepository for SqliteApplicationRepository {
         Ok(rows.iter().map(app_from_row).collect())
     }
 
-    async fn update(&self, id: &str, update: ApplicationUpdate) -> Result<Application, DomainError> {
+    async fn update(
+        &self,
+        id: &str,
+        update: ApplicationUpdate,
+    ) -> Result<Application, DomainError> {
         let existing = self.get(id).await?;
         let name = update.name.unwrap_or(existing.name);
         let status = update.status.unwrap_or(existing.status);
-        let allowed = update.allowed_virtual_models.unwrap_or(existing.allowed_virtual_models);
-        let allow_direct = update.allow_direct_models.unwrap_or(existing.allow_direct_models);
-        let budget = update.monthly_budget_microunits.unwrap_or(existing.monthly_budget_microunits);
+        let allowed = update
+            .allowed_virtual_models
+            .unwrap_or(existing.allowed_virtual_models);
+        let allow_direct = update
+            .allow_direct_models
+            .unwrap_or(existing.allow_direct_models);
+        let budget = update
+            .monthly_budget_microunits
+            .unwrap_or(existing.monthly_budget_microunits);
         let metadata = update.metadata.unwrap_or(existing.metadata);
         sqlx::query(
             "UPDATE applications SET name=?, status=?, allowed_virtual_models_json=?, allow_direct_models=?, monthly_budget_microunits=?, metadata_json=?, updated_at=? WHERE id=?",
@@ -188,11 +198,12 @@ impl ApiKeyRepository for SqliteApiKeyRepository {
     }
 
     async fn list_by_application(&self, application_id: &str) -> Result<Vec<ApiKey>, DomainError> {
-        let rows = sqlx::query("SELECT * FROM api_keys WHERE application_id = ? ORDER BY created_at DESC")
-            .bind(application_id)
-            .fetch_all(&self.pool)
-            .await
-            .map_err(|e| db_error(DomainResource::ApiKey, e))?;
+        let rows =
+            sqlx::query("SELECT * FROM api_keys WHERE application_id = ? ORDER BY created_at DESC")
+                .bind(application_id)
+                .fetch_all(&self.pool)
+                .await
+                .map_err(|e| db_error(DomainResource::ApiKey, e))?;
         Ok(rows.iter().map(key_from_row).collect())
     }
 
@@ -206,7 +217,11 @@ impl ApiKeyRepository for SqliteApiKeyRepository {
         Ok(())
     }
 
-    async fn touch_last_used(&self, id: &str, at: chrono::DateTime<Utc>) -> Result<(), DomainError> {
+    async fn touch_last_used(
+        &self,
+        id: &str,
+        at: chrono::DateTime<Utc>,
+    ) -> Result<(), DomainError> {
         sqlx::query("UPDATE api_keys SET last_used_at = ? WHERE id = ?")
             .bind(ts_to_string(at))
             .bind(id)
@@ -254,7 +269,12 @@ fn quota_from_row(row: &sqlx::sqlite::SqliteRow) -> QuotaPolicy {
 
 #[async_trait]
 impl QuotaRepository for SqliteQuotaRepository {
-    async fn upsert_for_subject(&self, subject_type: &str, subject_id: &str, values: QuotaValues) -> Result<QuotaPolicy, DomainError> {
+    async fn upsert_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+        values: QuotaValues,
+    ) -> Result<QuotaPolicy, DomainError> {
         sqlx::query(
             "INSERT INTO quota_policies (id, subject_type, subject_id, rpm, tpm, daily_requests, monthly_tokens, monthly_cost_microunits, exceed_action, enabled, created_at, updated_at)
              VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)
@@ -279,10 +299,16 @@ impl QuotaRepository for SqliteQuotaRepository {
         .map_err(|e| db_error(DomainResource::Application, e))?;
         self.get_for_subject(subject_type, subject_id)
             .await?
-            .ok_or_else(|| DomainError::internal(DomainResource::Application, "quota policy vanished"))
+            .ok_or_else(|| {
+                DomainError::internal(DomainResource::Application, "quota policy vanished")
+            })
     }
 
-    async fn get_for_subject(&self, subject_type: &str, subject_id: &str) -> Result<Option<QuotaPolicy>, DomainError> {
+    async fn get_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+    ) -> Result<Option<QuotaPolicy>, DomainError> {
         let row = sqlx::query(
             "SELECT * FROM quota_policies WHERE subject_type = ? AND subject_id = ? AND enabled = 1",
         )

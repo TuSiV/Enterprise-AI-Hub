@@ -65,7 +65,9 @@ impl RateLimiter {
                 }
             }
             if state.minute_events.len() >= rpm.max(0) as usize {
-                return LimiterDecision::RateLimited { retry_after_secs: 60 };
+                return LimiterDecision::RateLimited {
+                    retry_after_secs: 60,
+                };
             }
             state.minute_events.push_back(now);
         }
@@ -112,13 +114,19 @@ mod tests {
             LimiterDecision::RateLimited { .. }
         ));
         // 其他 subject 不受影响
-        assert_eq!(limiter.check("app-2", Some(3), None).await, LimiterDecision::Allowed);
+        assert_eq!(
+            limiter.check("app-2", Some(3), None).await,
+            LimiterDecision::Allowed
+        );
     }
 
     #[tokio::test]
     async fn daily_quota_blocks() {
         let limiter = RateLimiter::new();
-        assert_eq!(limiter.check("app-1", None, Some(1)).await, LimiterDecision::Allowed);
+        assert_eq!(
+            limiter.check("app-1", None, Some(1)).await,
+            LimiterDecision::Allowed
+        );
         assert_eq!(
             limiter.check("app-1", None, Some(1)).await,
             LimiterDecision::DailyQuotaExceeded
@@ -129,7 +137,10 @@ mod tests {
     async fn no_limits_always_allowed() {
         let limiter = RateLimiter::new();
         for _ in 0..100 {
-            assert_eq!(limiter.check("app-1", None, None).await, LimiterDecision::Allowed);
+            assert_eq!(
+                limiter.check("app-1", None, None).await,
+                LimiterDecision::Allowed
+            );
         }
     }
 }

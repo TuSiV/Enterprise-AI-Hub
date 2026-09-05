@@ -120,14 +120,12 @@ pub struct AuthConfig {
     pub secret_backend: Option<String>,
 }
 
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
 #[derive(Default)]
 pub struct WebConfig {
     pub dist_path: Option<String>,
 }
-
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]
@@ -146,7 +144,10 @@ pub struct Config {
 
 impl Config {
     /// CLI 参数 > 环境变量 > 配置文件 > 默认值。
-    pub fn load(config_path: Option<&Path>, mode_override: Option<Mode>) -> Result<Self, ConfigError> {
+    pub fn load(
+        config_path: Option<&Path>,
+        mode_override: Option<Mode>,
+    ) -> Result<Self, ConfigError> {
         let mut config = Self::default();
 
         let file_path = config_path
@@ -189,7 +190,11 @@ impl Config {
     fn apply_env(&mut self) {
         if let Ok(v) = std::env::var("AIHUB_MODE") {
             if v == "desktop" || v == "server" {
-                self.mode = if v == "desktop" { Mode::Desktop } else { Mode::Server };
+                self.mode = if v == "desktop" {
+                    Mode::Desktop
+                } else {
+                    Mode::Server
+                };
             }
         }
         if let Ok(v) = std::env::var("AIHUB_DATABASE_URL") {
@@ -266,16 +271,13 @@ impl Config {
             return None;
         }
         // 常见相对位置：仓库内运行或发布目录
-        for candidate in [
+        [
             PathBuf::from("../web/dist"),
             PathBuf::from("./web/dist"),
             self.data_dir().join("web"),
-        ] {
-            if candidate.join("index.html").exists() {
-                return Some(candidate);
-            }
-        }
-        None
+        ]
+        .into_iter()
+        .find(|candidate| candidate.join("index.html").exists())
     }
 
     pub fn to_toml(&self) -> String {

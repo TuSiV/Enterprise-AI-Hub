@@ -127,7 +127,10 @@ impl RequestRepository for SqliteRequestRepository {
             binds.push(status.clone());
         }
         if let Some(model) = &filter.model {
-            push("(resolved_model_key = ? OR requested_model = ?)", &mut where_clause);
+            push(
+                "(resolved_model_key = ? OR requested_model = ?)",
+                &mut where_clause,
+            );
             binds.push(model.clone());
             binds.push(model.clone());
         }
@@ -215,7 +218,10 @@ impl RequestRepository for SqliteRequestRepository {
         Ok(())
     }
 
-    async fn usage_for_request(&self, request_id: &str) -> Result<Option<UsageRecord>, DomainError> {
+    async fn usage_for_request(
+        &self,
+        request_id: &str,
+    ) -> Result<Option<UsageRecord>, DomainError> {
         let row = sqlx::query("SELECT * FROM usage_records WHERE request_id = ?")
             .bind(request_id)
             .fetch_optional(&self.pool)
@@ -255,7 +261,13 @@ impl RequestRepository for SqliteRequestRepository {
         }))
     }
 
-    async fn update_resolved(&self, id: &str, model_id: &str, model_key: &str, provider_id: &str) -> Result<(), DomainError> {
+    async fn update_resolved(
+        &self,
+        id: &str,
+        model_id: &str,
+        model_key: &str,
+        provider_id: &str,
+    ) -> Result<(), DomainError> {
         sqlx::query("UPDATE ai_requests SET resolved_model_id=?, resolved_model_key=?, provider_id=?, status='running' WHERE id=?")
             .bind(model_id)
             .bind(model_key)
@@ -312,7 +324,13 @@ fn usage_join() -> &'static str {
       LEFT JOIN cost_records c ON c.request_id = r.id"
 }
 
-fn apply_usage_query(mut sql: String, query: &UsageQuery, clause: &str, binds: &mut Vec<String>, ts_binds: &mut Vec<DateTime<Utc>>) -> String {
+fn apply_usage_query(
+    mut sql: String,
+    query: &UsageQuery,
+    clause: &str,
+    binds: &mut Vec<String>,
+    ts_binds: &mut Vec<DateTime<Utc>>,
+) -> String {
     sql.push_str(clause);
     if let Some(app) = &query.application_id {
         sql.push_str(" AND r.application_id = ?");
@@ -375,7 +393,10 @@ async fn percentile_latency(
     let offset = ((count as f64) * quantile).floor() as i64;
     let offset = offset.clamp(0, count - 1);
 
-    let value_sql = format!("{} ORDER BY r.latency_ms LIMIT 1 OFFSET {offset}", build_sql("r.latency_ms AS v", query));
+    let value_sql = format!(
+        "{} ORDER BY r.latency_ms LIMIT 1 OFFSET {offset}",
+        build_sql("r.latency_ms AS v", query)
+    );
     Ok(bind_all(sqlx::query(&value_sql), query)
         .fetch_one(pool)
         .await
@@ -387,7 +408,13 @@ async fn avg_ttft(pool: &SqlitePool, query: &UsageQuery) -> Result<Option<i64>, 
     let mut binds: Vec<String> = Vec::new();
     let mut ts_binds: Vec<DateTime<Utc>> = Vec::new();
     let mut sql = "SELECT AVG(r.ttft_ms) AS v FROM ai_requests r".to_string();
-    sql = apply_usage_query(sql, query, " WHERE r.ttft_ms IS NOT NULL", &mut binds, &mut ts_binds);
+    sql = apply_usage_query(
+        sql,
+        query,
+        " WHERE r.ttft_ms IS NOT NULL",
+        &mut binds,
+        &mut ts_binds,
+    );
     let mut q = sqlx::query(&sql);
     for b in &binds {
         q = q.bind(b);
@@ -402,7 +429,11 @@ async fn avg_ttft(pool: &SqlitePool, query: &UsageQuery) -> Result<Option<i64>, 
     Ok(row.get::<Option<f64>, _>("v").map(|v| v as i64))
 }
 
-async fn enrich_percentiles(pool: &SqlitePool, mut agg: UsageAggregates, query: &UsageQuery) -> Result<UsageAggregates, DomainError> {
+async fn enrich_percentiles(
+    pool: &SqlitePool,
+    mut agg: UsageAggregates,
+    query: &UsageQuery,
+) -> Result<UsageAggregates, DomainError> {
     agg.p50_latency_ms = percentile_latency(pool, query, 0.5).await?;
     agg.p95_latency_ms = percentile_latency(pool, query, 0.95).await?;
     agg.avg_ttft_ms = avg_ttft(pool, query).await?;
@@ -431,14 +462,22 @@ impl UsageRepository for SqliteUsageRepository {
         enrich_percentiles(&self.pool, agg, query).await
     }
 
-    async fn timeseries(&self, query: &UsageQuery, bucket: &str) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
+    async fn timeseries(
+        &self,
+        query: &UsageQuery,
+        bucket: &str,
+    ) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
         let expr = match bucket {
             "hour" => "substr(r.started_at,1,13) || ':00:00Z'",
             _ => "substr(r.started_at,1,10)",
         };
         let mut binds: Vec<String> = Vec::new();
         let mut ts_binds: Vec<DateTime<Utc>> = Vec::new();
-        let mut sql = format!("SELECT {expr} AS bucket, {}{}", aggregates_select_clause(), usage_join());
+        let mut sql = format!(
+            "SELECT {expr} AS bucket, {}{}",
+            aggregates_select_clause(),
+            usage_join()
+        );
         sql = apply_usage_query(sql, query, " WHERE 1=1", &mut binds, &mut ts_binds);
         sql.push_str(" GROUP BY bucket ORDER BY bucket");
         let mut q = sqlx::query(&sql);
@@ -458,7 +497,10 @@ impl UsageRepository for SqliteUsageRepository {
             .collect())
     }
 
-    async fn by_model(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
+    async fn by_model(
+        &self,
+        query: &UsageQuery,
+    ) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
         let mut binds: Vec<String> = Vec::new();
         let mut ts_binds: Vec<DateTime<Utc>> = Vec::new();
         let mut sql = format!(
@@ -485,7 +527,10 @@ impl UsageRepository for SqliteUsageRepository {
             .collect())
     }
 
-    async fn by_application(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
+    async fn by_application(
+        &self,
+        query: &UsageQuery,
+    ) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
         let mut binds: Vec<String> = Vec::new();
         let mut ts_binds: Vec<DateTime<Utc>> = Vec::new();
         let mut sql = format!(
@@ -512,7 +557,11 @@ impl UsageRepository for SqliteUsageRepository {
             .collect())
     }
 
-    async fn monthly_cost_for_application(&self, application_id: &str, month_start: DateTime<Utc>) -> Result<i64, DomainError> {
+    async fn monthly_cost_for_application(
+        &self,
+        application_id: &str,
+        month_start: DateTime<Utc>,
+    ) -> Result<i64, DomainError> {
         let next_month = month_start + Duration::days(31);
         let month_start_str = ts_to_string(month_start);
         // 用月起始时间字符串比较即可（RFC3339 UTC 定宽）
@@ -531,7 +580,11 @@ impl UsageRepository for SqliteUsageRepository {
         Ok(row.get::<i64, _>("v"))
     }
 
-    async fn monthly_tokens_for_application(&self, application_id: &str, month_start: DateTime<Utc>) -> Result<i64, DomainError> {
+    async fn monthly_tokens_for_application(
+        &self,
+        application_id: &str,
+        month_start: DateTime<Utc>,
+    ) -> Result<i64, DomainError> {
         let month_prefix = ts_to_string(month_start)[..7].to_string();
         let row = sqlx::query(
             "SELECT COALESCE(SUM(u.total_tokens),0) AS v

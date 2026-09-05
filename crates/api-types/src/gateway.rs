@@ -21,10 +21,6 @@ fn default_object_list() -> String {
     "list".to_string()
 }
 
-fn default_object_embedding() -> String {
-    "embedding".to_string()
-}
-
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ChatMessage {
     pub role: String,

@@ -139,7 +139,11 @@ impl DomainError {
         }
     }
 
-    pub fn in_use(resource: DomainResource, id: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn in_use(
+        resource: DomainResource,
+        id: impl Into<String>,
+        message: impl Into<String>,
+    ) -> Self {
         Self {
             code: DomainErrorCode::ResourceInUse,
             resource,

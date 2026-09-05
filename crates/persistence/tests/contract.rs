@@ -10,7 +10,9 @@ use sqlx::SqlitePool;
 
 async fn pool() -> SqlitePool {
     let dir = std::env::temp_dir().join(format!("aihub-contract-{}", uuid::Uuid::new_v4()));
-    open_sqlite(&dir.join("test.db")).await.expect("open sqlite")
+    open_sqlite(&dir.join("test.db"))
+        .await
+        .expect("open sqlite")
 }
 
 #[tokio::test]
@@ -43,7 +45,13 @@ async fn provider_crud_and_unique_key() {
             ..same_provider()
         })
         .await;
-    assert!(matches!(dup, Err(DomainError { code: DomainErrorCode::Duplicate, .. })));
+    assert!(matches!(
+        dup,
+        Err(DomainError {
+            code: DomainErrorCode::Duplicate,
+            ..
+        })
+    ));
 
     let fetched = repo.get(&created.id).await.unwrap();
     assert_eq!(fetched.config["sendStreamOptions"], serde_json::json!(true));
@@ -62,7 +70,9 @@ async fn provider_crud_and_unique_key() {
     assert!(!updated.enabled);
     assert_eq!(updated.status, "disabled");
 
-    repo.set_health(&created.id, "healthy", chrono::Utc::now()).await.unwrap();
+    repo.set_health(&created.id, "healthy", chrono::Utc::now())
+        .await
+        .unwrap();
     assert_eq!(repo.get(&created.id).await.unwrap().health, "healthy");
 
     repo.delete(&created.id).await.unwrap();
@@ -129,7 +139,13 @@ async fn model_unique_per_provider_and_filters() {
             metadata: serde_json::json!({}),
         })
         .await;
-    assert!(matches!(dup, Err(DomainError { code: DomainErrorCode::Duplicate, .. })));
+    assert!(matches!(
+        dup,
+        Err(DomainError {
+            code: DomainErrorCode::Duplicate,
+            ..
+        })
+    ));
 
     let listed = models
         .list(&ModelFilter {
@@ -205,7 +221,10 @@ async fn virtual_model_targets_replace() {
 
     let by_key = vms.get_by_key("general-smart").await.unwrap();
     assert_eq!(by_key.id, vm.id);
-    assert_eq!(by_key.config["retry"]["maxAttemptsPerTarget"], serde_json::json!(2));
+    assert_eq!(
+        by_key.config["retry"]["maxAttemptsPerTarget"],
+        serde_json::json!(2)
+    );
 
     let targets = vms.targets_for(&vm.id).await.unwrap();
     assert_eq!(targets.len(), 1);
@@ -264,7 +283,10 @@ async fn application_keys_and_quota() {
         .unwrap();
 
     assert!(key.is_active(chrono::Utc::now()));
-    assert_eq!(keys.get_by_prefix("abcd1234").await.unwrap().unwrap().id, key.id);
+    assert_eq!(
+        keys.get_by_prefix("abcd1234").await.unwrap().unwrap().id,
+        key.id
+    );
     assert!(keys.get_by_prefix("missing").await.unwrap().is_none());
 
     keys.revoke(&key.id, chrono::Utc::now()).await.unwrap();
@@ -285,7 +307,11 @@ async fn application_keys_and_quota() {
         )
         .await
         .unwrap();
-    let quota = quotas.get_for_subject("application", &app.id).await.unwrap().unwrap();
+    let quota = quotas
+        .get_for_subject("application", &app.id)
+        .await
+        .unwrap()
+        .unwrap();
     assert_eq!(quota.rpm, Some(10));
     // upsert 更新
     quotas
@@ -299,7 +325,15 @@ async fn application_keys_and_quota() {
         )
         .await
         .unwrap();
-    assert_eq!(quotas.get_for_subject("application", &app.id).await.unwrap().unwrap().rpm, Some(20));
+    assert_eq!(
+        quotas
+            .get_for_subject("application", &app.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .rpm,
+        Some(20)
+    );
 }
 
 #[tokio::test]
@@ -414,7 +448,10 @@ async fn request_usage_cost_lifecycle_and_aggregations() {
     assert_eq!(by_model.len(), 1);
     assert_eq!(by_model[0].0, "mock-pro");
 
-    let by_app = usage_repo.by_application(&UsageQuery::default()).await.unwrap();
+    let by_app = usage_repo
+        .by_application(&UsageQuery::default())
+        .await
+        .unwrap();
     assert_eq!(by_app.len(), 1);
 
     let monthly = usage_repo
@@ -460,7 +497,12 @@ async fn audit_insert_and_filter() {
                 trace_id: None,
                 actor_type: "admin".into(),
                 actor_id: None,
-                event_type: if i == 0 { "provider.created" } else { "provider.updated" }.into(),
+                event_type: if i == 0 {
+                    "provider.created"
+                } else {
+                    "provider.updated"
+                }
+                .into(),
                 resource_type: Some("provider".into()),
                 resource_id: Some("p1".into()),
                 decision: None,

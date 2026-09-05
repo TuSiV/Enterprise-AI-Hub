@@ -100,8 +100,7 @@ impl KeyringSecretStore {
     }
 
     fn entry(&self, key: &SecretRef) -> Result<keyring::Entry, SecretError> {
-        keyring::Entry::new(&self.service, &key.0)
-            .map_err(|e| SecretError::Keyring(e.to_string()))
+        keyring::Entry::new(&self.service, &key.0).map_err(|e| SecretError::Keyring(e.to_string()))
     }
 }
 
@@ -116,10 +115,9 @@ impl SecretStore for KeyringSecretStore {
     async fn get(&self, key: &SecretRef) -> Result<Option<SecretValue>, SecretError> {
         let entry = self.entry(key)?;
         // keyring 为同步 API，避免在 async 上下文阻塞，放入阻塞线程池。
-        let result =
-            tokio::task::spawn_blocking(move || entry.get_password()).await.map_err(|e| {
-                SecretError::Keyring(format!("join error: {e}"))
-            })?;
+        let result = tokio::task::spawn_blocking(move || entry.get_password())
+            .await
+            .map_err(|e| SecretError::Keyring(format!("join error: {e}")))?;
         match result {
             Ok(password) => Ok(Some(SecretValue::new(password))),
             Err(keyring::Error::NoEntry) => Ok(None),

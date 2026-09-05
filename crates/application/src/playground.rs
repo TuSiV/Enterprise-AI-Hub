@@ -5,12 +5,11 @@ use serde_json::{json, Value};
 use aihub_api_types::admin::PlaygroundRunRequest;
 use aihub_domain::canonical::{CanonicalChatRequest, CanonicalMessage, MessageRole};
 use aihub_domain::error::DomainError;
-use aihub_domain::repos::ApplicationRepository;
 use aihub_domain::DomainResource;
 
 use crate::error::PipelineError;
 use crate::pipeline::{AuthContext, ChatExecution, PipelineStreamEvent, StreamExecution};
-use crate::{ChatPipeline, PLAYGROUND_APPLICATION_KEY, Repos};
+use crate::{ChatPipeline, Repos, PLAYGROUND_APPLICATION_KEY};
 
 pub struct PlaygroundService {
     pipeline: std::sync::Arc<ChatPipeline>,
@@ -46,7 +45,10 @@ fn build_canonical(request: &PlaygroundRunRequest) -> Result<CanonicalChatReques
             .get("role")
             .and_then(|r| r.as_str())
             .unwrap_or("user");
-        let content = message.get("content").map(content_to_text).unwrap_or_default();
+        let content = message
+            .get("content")
+            .map(content_to_text)
+            .unwrap_or_default();
         messages.push(CanonicalMessage {
             role: MessageRole::parse(role),
             content,
@@ -55,7 +57,9 @@ fn build_canonical(request: &PlaygroundRunRequest) -> Result<CanonicalChatReques
         });
     }
     if messages.is_empty() {
-        return Err(PipelineError::invalid_request("at least one message is required"));
+        return Err(PipelineError::invalid_request(
+            "at least one message is required",
+        ));
     }
     Ok(CanonicalChatRequest {
         model: request.model.clone(),
@@ -77,7 +81,12 @@ impl PlaygroundService {
     }
 
     async fn playground_ctx(&self) -> Result<AuthContext, DomainError> {
-        let application = match self.repos.applications.get_by_key(PLAYGROUND_APPLICATION_KEY).await {
+        let application = match self
+            .repos
+            .applications
+            .get_by_key(PLAYGROUND_APPLICATION_KEY)
+            .await
+        {
             Ok(app) => app,
             Err(_) => {
                 return Err(DomainError::not_found(
@@ -94,13 +103,22 @@ impl PlaygroundService {
     }
 
     pub async fn run(&self, request: PlaygroundRunRequest) -> Result<ChatExecution, PipelineError> {
-        let ctx = self.playground_ctx().await.map_err(|e| PipelineError::from_domain(&e))?;
+        let ctx = self
+            .playground_ctx()
+            .await
+            .map_err(|e| PipelineError::from_domain(&e))?;
         let canonical = build_canonical(&request)?;
         self.pipeline.execute_chat(&ctx, canonical).await
     }
 
-    pub async fn run_stream(&self, request: PlaygroundRunRequest) -> Result<StreamExecution, PipelineError> {
-        let ctx = self.playground_ctx().await.map_err(|e| PipelineError::from_domain(&e))?;
+    pub async fn run_stream(
+        &self,
+        request: PlaygroundRunRequest,
+    ) -> Result<StreamExecution, PipelineError> {
+        let ctx = self
+            .playground_ctx()
+            .await
+            .map_err(|e| PipelineError::from_domain(&e))?;
         let canonical = build_canonical(&request)?;
         self.pipeline.execute_chat_stream(&ctx, canonical).await
     }

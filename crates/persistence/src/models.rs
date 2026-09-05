@@ -26,7 +26,8 @@ fn model_from_row(row: &sqlx::sqlite::SqliteRow) -> Model {
         provider_id: row.get("provider_id"),
         model_key: row.get("model_key"),
         display_name: row.get("display_name"),
-        model_type: ModelType::parse(&row.get::<String, _>("model_type")).unwrap_or(ModelType::Chat),
+        model_type: ModelType::parse(&row.get::<String, _>("model_type"))
+            .unwrap_or(ModelType::Chat),
         context_window: row.get("context_window"),
         max_output_tokens: row.get("max_output_tokens"),
         capabilities,
@@ -57,7 +58,9 @@ async fn insert_model(pool: &SqlitePool, model: &NewModel) -> Result<String, Dom
         .bind(model.context_window)
         .bind(model.max_output_tokens)
         .bind(json_string(&model.capabilities))
-        .bind(json_string(&serde_json::to_value(&model.pricing).unwrap_or_default()))
+        .bind(json_string(
+            &serde_json::to_value(&model.pricing).unwrap_or_default(),
+        ))
         .bind(model.enabled as i64)
         .bind(model.discovered as i64)
         .bind(json_string(&model.metadata))
@@ -67,7 +70,10 @@ async fn insert_model(pool: &SqlitePool, model: &NewModel) -> Result<String, Dom
         .await
         .map_err(|e| db_error(DomainResource::Model, e))?;
     if result.rows_affected() == 0 {
-        return Err(DomainError::duplicate(DomainResource::Model, &model.model_key));
+        return Err(DomainError::duplicate(
+            DomainResource::Model,
+            &model.model_key,
+        ));
     }
     Ok(id)
 }
@@ -84,14 +90,13 @@ impl ModelRepository for SqliteModelRepository {
             Ok(id) => self.get(&id).await,
             Err(_) => {
                 // 已存在则刷新发现元数据（保留人工编辑的 display/pricing）
-                let existing = sqlx::query(
-                    "SELECT id FROM models WHERE provider_id = ? AND model_key = ?",
-                )
-                .bind(&model.provider_id)
-                .bind(&model.model_key)
-                .fetch_one(&self.pool)
-                .await
-                .map_err(|e| db_error(DomainResource::Model, e))?;
+                let existing =
+                    sqlx::query("SELECT id FROM models WHERE provider_id = ? AND model_key = ?")
+                        .bind(&model.provider_id)
+                        .bind(&model.model_key)
+                        .fetch_one(&self.pool)
+                        .await
+                        .map_err(|e| db_error(DomainResource::Model, e))?;
                 let id: String = existing.get("id");
                 let type_str = model.model_type.as_str();
                 sqlx::query(
@@ -154,7 +159,9 @@ impl ModelRepository for SqliteModelRepository {
         let display_name = update.display_name.unwrap_or(existing.display_name);
         let model_type = update.model_type.unwrap_or(existing.model_type);
         let context_window = update.context_window.unwrap_or(existing.context_window);
-        let max_output_tokens = update.max_output_tokens.unwrap_or(existing.max_output_tokens);
+        let max_output_tokens = update
+            .max_output_tokens
+            .unwrap_or(existing.max_output_tokens);
         let capabilities = update.capabilities.unwrap_or(existing.capabilities);
         let pricing = update.pricing.unwrap_or(existing.pricing);
         let enabled = update.enabled.unwrap_or(existing.enabled);

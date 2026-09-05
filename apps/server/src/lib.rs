@@ -94,14 +94,24 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     let pool = aihub_persistence::open_sqlite(&config.db_path()).await?;
 
     let repos = Repos {
-        providers: Arc::new(aihub_persistence::SqliteProviderRepository::new(pool.clone())),
-        provider_health: Arc::new(aihub_persistence::SqliteProviderHealthRepository::new(pool.clone())),
+        providers: Arc::new(aihub_persistence::SqliteProviderRepository::new(
+            pool.clone(),
+        )),
+        provider_health: Arc::new(aihub_persistence::SqliteProviderHealthRepository::new(
+            pool.clone(),
+        )),
         models: Arc::new(aihub_persistence::SqliteModelRepository::new(pool.clone())),
-        virtual_models: Arc::new(aihub_persistence::SqliteVirtualModelRepository::new(pool.clone())),
-        applications: Arc::new(aihub_persistence::SqliteApplicationRepository::new(pool.clone())),
+        virtual_models: Arc::new(aihub_persistence::SqliteVirtualModelRepository::new(
+            pool.clone(),
+        )),
+        applications: Arc::new(aihub_persistence::SqliteApplicationRepository::new(
+            pool.clone(),
+        )),
         api_keys: Arc::new(aihub_persistence::SqliteApiKeyRepository::new(pool.clone())),
         quota: Arc::new(aihub_persistence::SqliteQuotaRepository::new(pool.clone())),
-        requests: Arc::new(aihub_persistence::SqliteRequestRepository::new(pool.clone())),
+        requests: Arc::new(aihub_persistence::SqliteRequestRepository::new(
+            pool.clone(),
+        )),
         usage: Arc::new(aihub_persistence::SqliteUsageRepository::new(pool.clone())),
         audit: Arc::new(aihub_persistence::SqliteAuditRepository::new(pool.clone())),
     };
@@ -118,7 +128,11 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         _ => Arc::from(aihub_secrets::default_store()),
     };
     let factories: Vec<Arc<dyn ProviderFactory>> = vec![Arc::new(OpenAICompatibleFactory)];
-    let registry = Arc::new(ProviderRegistry::new(factories, repos.providers.clone(), secrets.clone()));
+    let registry = Arc::new(ProviderRegistry::new(
+        factories,
+        repos.providers.clone(),
+        secrets.clone(),
+    ));
     let resolver = Arc::new(ModelResolver::new(
         repos.virtual_models.clone(),
         repos.models.clone(),
@@ -137,7 +151,11 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     // 预置数据（§16.3 / playground 应用）
     seed::seed_defaults(&repos).await;
 
-    let providers = Arc::new(ProviderService::new(repos.clone(), registry.clone(), secrets));
+    let providers = Arc::new(ProviderService::new(
+        repos.clone(),
+        registry.clone(),
+        secrets,
+    ));
     let models = Arc::new(ModelService::new(repos.clone()));
     let virtual_models = Arc::new(VirtualModelService::new(repos.clone()));
     let applications = Arc::new(ApplicationService::new(repos.clone()));
@@ -205,13 +223,19 @@ async fn health_live() -> &'static str {
     "ok"
 }
 
-async fn health_ready(axum::extract::State(state): axum::extract::State<AppState>) -> axum::response::Response {
+async fn health_ready(
+    axum::extract::State(state): axum::extract::State<AppState>,
+) -> axum::response::Response {
     // ready = DB 可读写
     let ok = state.repos.models.count_enabled().await.is_ok();
     if ok {
         (axum::http::StatusCode::OK, "ready").into_response()
     } else {
-        (axum::http::StatusCode::SERVICE_UNAVAILABLE, "db unavailable").into_response()
+        (
+            axum::http::StatusCode::SERVICE_UNAVAILABLE,
+            "db unavailable",
+        )
+            .into_response()
     }
 }
 
@@ -229,7 +253,11 @@ async fn api_root() -> axum::response::Html<&'static str> {
 pub async fn bind(config: &Config) -> anyhow::Result<(SocketAddr, u16)> {
     let host = config.gateway.host.clone();
     let base_port = config.gateway.port;
-    let attempts = if config.mode == aihub_config::Mode::Desktop { 20 } else { 1 };
+    let attempts = if config.mode == aihub_config::Mode::Desktop {
+        20
+    } else {
+        1
+    };
     for offset in 0..attempts {
         let port = base_port + offset;
         let addr: SocketAddr = format!("{host}:{port}").parse()?;

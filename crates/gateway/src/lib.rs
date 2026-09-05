@@ -68,7 +68,13 @@ async fn authenticate(
 }
 
 /// 扩展响应头（§11.4）
-fn aih_headers(response: &mut Response, request_id: &str, resolved_model: &str, provider: &str, retries: i32) {
+fn aih_headers(
+    response: &mut Response,
+    request_id: &str,
+    resolved_model: &str,
+    provider: &str,
+    retries: i32,
+) {
     let headers = response.headers_mut();
     if let Ok(v) = axum::http::HeaderValue::from_str(request_id) {
         headers.insert("x-aih-request-id", v);
@@ -114,7 +120,10 @@ async fn chat_completions(
     chat_stream(&state, ctx, canonical, model_name).await
 }
 
-fn to_canonical(request: &wire::ChatCompletionRequest, stream: bool) -> aihub_domain::canonical::CanonicalChatRequest {
+fn to_canonical(
+    request: &wire::ChatCompletionRequest,
+    stream: bool,
+) -> aihub_domain::canonical::CanonicalChatRequest {
     use aihub_domain::canonical::*;
     let messages = request
         .messages
@@ -192,7 +201,9 @@ async fn chat_non_stream(
     }
 }
 
-fn to_wire_response(execution: &aihub_application::pipeline::ChatExecution) -> wire::ChatCompletionResponse {
+fn to_wire_response(
+    execution: &aihub_application::pipeline::ChatExecution,
+) -> wire::ChatCompletionResponse {
     let response = &execution.response;
     let message = wire::ResponseMessage {
         role: "assistant".to_string(),
@@ -215,11 +226,17 @@ fn to_wire_response(execution: &aihub_application::pipeline::ChatExecution) -> w
         id: execution.request_id.clone(),
         object: "chat.completion".to_string(),
         created: unix_now(),
-        model: execution.virtual_model_key.clone().unwrap_or_else(|| execution.resolved_model_key.clone()),
+        model: execution
+            .virtual_model_key
+            .clone()
+            .unwrap_or_else(|| execution.resolved_model_key.clone()),
         choices: vec![wire::Choice {
             index: 0,
             message,
-            finish_reason: response.finish_reason.clone().or_else(|| Some("stop".to_string())),
+            finish_reason: response
+                .finish_reason
+                .clone()
+                .or_else(|| Some("stop".to_string())),
         }],
         usage,
     }

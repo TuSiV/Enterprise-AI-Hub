@@ -8,7 +8,9 @@ mod providers;
 mod requests;
 mod virtual_models;
 
-pub use applications::{SqliteApiKeyRepository, SqliteApplicationRepository, SqliteQuotaRepository};
+pub use applications::{
+    SqliteApiKeyRepository, SqliteApplicationRepository, SqliteQuotaRepository,
+};
 pub use audit::SqliteAuditRepository;
 pub use models::SqliteModelRepository;
 pub use providers::{SqliteProviderHealthRepository, SqliteProviderRepository};
@@ -92,7 +94,10 @@ pub(crate) fn parse_vec(value: Option<String>) -> Vec<String> {
 }
 
 /// 仓储层错误 → DomainError 的统一出口。
-pub(crate) fn db_error(resource: aihub_domain::DomainResource, err: sqlx::Error) -> aihub_domain::DomainError {
+pub(crate) fn db_error(
+    resource: aihub_domain::DomainResource,
+    err: sqlx::Error,
+) -> aihub_domain::DomainError {
     match &err {
         sqlx::Error::RowNotFound => aihub_domain::DomainError::not_found(resource, "row"),
         sqlx::Error::Database(db_err) => {
