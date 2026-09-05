@@ -21,7 +21,7 @@ use aihub_config::Config;
 use aihub_provider_core::ProviderFactory;
 use aihub_provider_openai_compatible::OpenAICompatibleFactory;
 use axum::response::IntoResponse;
-use axum::routing::{get, post};
+use axum::routing::get;
 use axum::Router;
 use tower_http::cors::CorsLayer;
 use tower_http::services::{ServeDir, ServeFile};

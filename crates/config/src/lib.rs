@@ -110,6 +110,7 @@ impl Default for TelemetryConfig {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct AuthConfig {
     /// 固定 admin token；未设置时首次启动生成并写入 data dir 的 admin_token 文件。
     pub admin_token: Option<String>,
@@ -119,27 +120,14 @@ pub struct AuthConfig {
     pub secret_backend: Option<String>,
 }
 
-impl Default for AuthConfig {
-    fn default() -> Self {
-        Self {
-            admin_token: None,
-            trusted_header_user: false,
-            secret_backend: None,
-        }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(default)]
+#[derive(Default)]
 pub struct WebConfig {
     pub dist_path: Option<String>,
 }
 
-impl Default for WebConfig {
-    fn default() -> Self {
-        Self { dist_path: None }
-    }
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 #[serde(default)]

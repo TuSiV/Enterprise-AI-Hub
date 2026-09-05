@@ -54,7 +54,7 @@ impl UsageTotal for wire::Usage {
     }
 }
 
-async fn failure(headers: &HeaderMap, state: &MockState) -> Option<Response> {
+async fn failure(headers: &HeaderMap, _state: &MockState) -> Option<Response> {
     let behavior = headers
         .get("x-mock-behavior")
         .and_then(|v| v.to_str().ok())

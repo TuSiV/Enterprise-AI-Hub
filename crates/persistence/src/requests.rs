@@ -110,7 +110,7 @@ impl RequestRepository for SqliteRequestRepository {
         let mut where_clause = String::new();
         let mut binds: Vec<String> = Vec::new();
         let mut bind_ts: Vec<DateTime<Utc>> = Vec::new();
-        let mut push = |clause: &str, where_clause: &mut String| {
+        let push = |clause: &str, where_clause: &mut String| {
             if where_clause.is_empty() {
                 where_clause.push_str(" WHERE ");
             } else {
