@@ -74,6 +74,25 @@ cd web && npm install && npm run dev   # http://localhost:5173，代理到 8787
 npm run build                          # 产物由 aihub-server 静态托管
 ```
 
+### 5. Desktop 壳（Tauri 2）
+
+```bash
+cargo run -p aihub-desktop
+# 或 Tauri CLI 开发模式（前端热更新）：cargo install tauri-cli && cargo tauri dev
+```
+
+桌面壳内嵌同一 Rust Core：本地 SQLite + loopback Gateway，窗口加载内置 Web 控制台并通过
+Tauri IPC 自动完成 Admin Token 登录（无需手动粘贴）。
+
+### 6. Python Runtime（协议脚手架，M11+）
+
+```bash
+cd runtime && pip install -r requirements.txt
+python -m app.main --port 0 --session-token <token>   # stdout 输出 PORT=<port> 握手
+```
+
+详见 [runtime/README.md](runtime/README.md)。
+
 ## 架构
 
 ```
@@ -96,16 +115,18 @@ OpenAI 兼容客户端 ───────────────────
 
 ```bash
 cargo fmt --check
-cargo clippy --workspace --all-targets -- -D warnings   # 当前还有少量 warning 收尾中
+cargo clippy --workspace --all-targets -- -D warnings
 cargo test                                              # 25 tests：domain 单元 / SQLite 契约 / Gateway e2e（failover、流式、限流、撤销 Key）
 cd web && npm run build                                 # tsc --noEmit + vite build
+./scripts/smoke.sh                                      # 进程级端到端冒烟
 ```
 
-CI：[.github/workflows/ci.yml](.github/workflows/ci.yml)。
+CI：[.github/workflows/ci.yml](.github/workflows/ci.yml)（rust: fmt + clippy -D warnings + test；web: typecheck + build）。
 
 ## 配置
 
-优先级：CLI > 环境变量 > config.toml > 默认值（方案 §26）。
+优先级：CLI > 环境变量 > config.toml > 默认值（方案 §26）。配置文件默认查找 `AIHUB_CONFIG`
+环境变量指向的 TOML 文件，或启动时传 `--config /path/to/aihub.toml`。
 
 | 环境变量 | 说明 | 默认 |
 |---|---|---|
@@ -115,6 +136,10 @@ CI：[.github/workflows/ci.yml](.github/workflows/ci.yml)。
 | `AIHUB_ADMIN_TOKEN` | 固定 admin token | 首次生成写入数据目录 |
 | `AIHUB_SECRET_BACKEND` | keyring / memory / env | keyring |
 | `AIHUB_DATABASE_URL` | SQLite 路径覆盖 | `<data>/aihub.db` |
+| `AIHUB_LOG_LEVEL` | 日志级别（tracing EnvFilter） | info |
+
+CLI：`aihub-server --config <path> --mode <desktop|server> --port <n> --print-admin-token`（启动横幅与 token 打印到 stderr）。
+
 
 ## 许可
 
