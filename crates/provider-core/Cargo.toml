@@ -1,0 +1,14 @@
+[package]
+name = "aihub-provider-core"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aihub-domain.workspace = true
+aihub-secrets.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true

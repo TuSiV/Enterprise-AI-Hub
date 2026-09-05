@@ -1,0 +1,43 @@
+[package]
+name = "aihub-server"
+version.workspace = true
+edition.workspace = true
+
+[lib]
+name = "aihub_server"
+path = "src/lib.rs"
+
+[[bin]]
+name = "aihub-server"
+path = "src/main.rs"
+
+[dependencies]
+aihub-api-types.workspace = true
+aihub-application.workspace = true
+aihub-config.workspace = true
+aihub-domain.workspace = true
+aihub-gateway.workspace = true
+aihub-persistence.workspace = true
+aihub-provider-core.workspace = true
+aihub-provider-openai-compatible.workspace = true
+aihub-secrets.workspace = true
+aihub-telemetry.workspace = true
+anyhow.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+axum.workspace = true
+chrono.workspace = true
+clap.workspace = true
+futures.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+tower.workspace = true
+tower-http.workspace = true
+tracing.workspace = true
+
+[dev-dependencies]
+reqwest.workspace = true
+uuid.workspace = true
+tower = { workspace = true, features = ["util"] }

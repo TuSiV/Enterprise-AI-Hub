@@ -1,0 +1,23 @@
+[package]
+name = "aihub-application"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aihub-api-types.workspace = true
+aihub-domain.workspace = true
+aihub-provider-core.workspace = true
+aihub-secrets.workspace = true
+async-trait.workspace = true
+chrono.workspace = true
+futures.workspace = true
+hex.workspace = true
+rand.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+subtle.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+tracing.workspace = true
+uuid.workspace = true

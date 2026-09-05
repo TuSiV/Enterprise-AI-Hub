@@ -1,0 +1,16 @@
+[package]
+name = "aihub-desktop"
+version.workspace = true
+edition.workspace = true
+description = "Enterprise AI Hub Desktop shell (Tauri)"
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+aihub-config.workspace = true
+aihub-server.workspace = true
+axum.workspace = true
+tauri = { version = "2", features = [] }
+tokio.workspace = true
+tracing.workspace = true

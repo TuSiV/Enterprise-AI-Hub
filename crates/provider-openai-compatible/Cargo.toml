@@ -1,0 +1,21 @@
+[package]
+name = "aihub-provider-openai-compatible"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]
+aihub-api-types.workspace = true
+aihub-domain.workspace = true
+aihub-provider-core.workspace = true
+aihub-secrets.workspace = true
+async-stream.workspace = true
+async-trait.workspace = true
+futures.workspace = true
+reqwest.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+uuid.workspace = true
+
+[dev-dependencies]
+axum.workspace = true
+tokio.workspace = true
