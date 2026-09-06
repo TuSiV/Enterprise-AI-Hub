@@ -293,7 +293,7 @@ cd web && npm run build                                 # TS 类型检查 + 构�
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
 ```
 
-覆盖矩阵：**Provider 契约（§31.3 十一用例）** · 网关集成（鉴权 / Failover / 流式 / 限流 / 撤销 Key）·
+覆盖矩阵：**Provider Adapter 契约（11 个标准化用例）** · 网关集成（鉴权 / Failover / 流式 / 限流 / 撤销 Key）·
 平台 e2e（Prompt / KB / Agent / Eval / DLP / OIDC 验签）· RBAC 多用户与防伪造 · 并发与取消风暴 ·
 SQLite / PostgreSQL 双库契约。
 
@@ -301,7 +301,7 @@ SQLite / PostgreSQL 双库契约。
 
 ## 配置
 
-优先级：**CLI > 环境变量 > config.toml > 默认值**（方案 §26）
+优先级：**CLI > 环境变量 > config.toml > 默认值**
 
 | 环境变量 | 说明 | 默认 |
 |---|---|:---|
@@ -322,7 +322,7 @@ CLI：`aihub-server --config <toml> --mode <desktop|server> --port <n> --print-a
 ## 项目结构
 
 ```
-├── crates/                     # Rust Core（方案 §7.1 依赖方向：domain 零反向依赖）
+├── crates/                     # Rust Core（domain 层零基础设施反向依赖）
 │   ├── domain                  # 实体/规范协议/仓储 Port/成本引擎
 │   ├── application             # 服务层 + 执行流水线 + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 协议适配 + SSE
