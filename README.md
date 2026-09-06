@@ -36,6 +36,18 @@
 | 🤖 **Agent / MCP** | 版本化 Agent 循环执行、工具白名单与全量审计、MCP stdio/HTTP 双通道 |
 | 🧪 **评测** | 数据集→多候选运行→Rule 打分 + LLM Judge→成本/延迟回归对比 |
 
+<details>
+<summary><b>设计边界 —— 我们明确不做的事（反模式约束）</b></summary>
+
+- ❌ 聊天页面优先（Chat UI 是客户端不是平台核心）
+- ❌ Provider if/else 写进 Gateway（必须走 Adapter）
+- ❌ Desktop 依赖 Docker / PostgreSQL / Redis
+- ❌ Agent 权限靠 Prompt（权限由 Core 强制交集）
+- ❌ RAG 先检索后鉴权（权限必须进入召回条件）
+- ❌ 为未来规模先上微服务（模块化单体 + Runtime 边界）
+
+</details>
+
 ---
 
 ## 架构
@@ -160,38 +172,9 @@ curl http://127.0.0.1:8787/v1/chat/completions \
 
 ---
 
-## 功能全景
-
-| 里程碑 | 能力 | 状态 |
-|:---:|---|:---:|
-| M0 | 13-crate Workspace · Server/Desktop 双宿主 · CI | ✅ |
-| M1 | SQLite + PostgreSQL 双 Adapter · 同一套契约测试双库通过 · SecretStore | ✅ |
-| M2-M3 | Provider 注册/测试/发现 · OpenAI 兼容网关 · API Key | ✅ |
-| M4 | SSE 流式 · 客户端取消 · 重试/Failover · 熔断器 · TTFT | ✅ |
-| M5 | Virtual Model · priority_failover · 路由模拟器 | ✅ |
-| M6-M7 | Usage/Cost（计费快照）· Dashboard · 配额 · 审计 | ✅ |
-| M8 | Prompt 版本化（publish 不可变）· Playground · 多候选 Compare | ✅ |
-| M9 | 桌面产品化：单实例 · 备份/恢复 · Recovery 指引 | ✅ |
-| M10 | **PostgreSQL 生产路径** · RBAC 多用户 · S3(SigV4，MinIO 实测) · Connected Desktop | ✅ |
-| M11 | Runtime Sidecar（握手/崩溃自愈）· runtime_jobs 队列 | ✅ |
-| M12-M13 | 知识库全链（PDF/DOCX）· 混合检索 · 带引用 RAG · 召回前置鉴权 | ✅ |
-| M14-M15 | Agent 循环（限额+审计）· Tool 注册/白名单 · MCP stdio+HTTP | ✅ |
-| M16 | Eval：数据集 → Rule + LLM Judge → 回归对比 | ✅ |
-| M17 | 数据分级→路由矩阵 · DLP 脱敏 · SSRF 校验 · 安全面板 | ✅ |
-
-<details>
-<summary><b>明确不做（方案 §35 反模式约束）</b></summary>
-
-- ❌ 聊天页面优先（Chat UI 是客户端不是平台核心）
-- ❌ Provider if/else 写进 Gateway（必须走 Adapter）
-- ❌ Desktop 依赖 Docker / PostgreSQL / Redis
-- ❌ Agent 权限靠 Prompt（权限由 Core 强制交集）
-- ❌ RAG 先检索后鉴权（权限必须进入召回条件）
-- ❌ 为未来规模先上微服务（模块化单体 + Runtime 边界）
-
-</details>
-
 ---
+
+
 
 ## 测试与质量门禁
 
