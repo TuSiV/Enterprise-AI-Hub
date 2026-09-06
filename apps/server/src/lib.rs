@@ -100,17 +100,60 @@ pub fn resolve_admin_token(config: &Config) -> anyhow::Result<String> {
     Ok(token)
 }
 
-pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
-    aihub_telemetry::init(&config.telemetry.log_level);
-    tracing::info!(target: "aihub::core", version = VERSION, mode = ?config.mode, "starting AI Hub core");
 
-    // SQLite（Desktop 默认）；PostgreSQL Adapter 在 M10 按同一 Port 接入。
+/// 按配置装配仓储（方案 §21.1）：SQLite（Desktop 默认）/ PostgreSQL（Server 生产，M10）。
+async fn build_repos(config: &Config) -> anyhow::Result<Repos> {
+    if config.database.driver == "postgres" {
+        let url = config
+            .database
+            .url
+            .clone()
+            .or_else(|| std::env::var("AIHUB_DATABASE_URL").ok())
+            .unwrap_or_else(|| "postgres://localhost/aihub".into());
+        let pool = aihub_persistence::open_postgres(&url).await?;
+        return Ok(Repos {
+            providers: Arc::new(aihub_persistence::pg_core::PgProviderRepository::new(pool.clone())),
+            provider_health: Arc::new(aihub_persistence::pg_core::PgProviderHealthRepository::new(
+                pool.clone(),
+            )),
+            models: Arc::new(aihub_persistence::pg_core::PgModelRepository::new(pool.clone())),
+            virtual_models: Arc::new(aihub_persistence::pg_core::PgVirtualModelRepository::new(
+                pool.clone(),
+            )),
+            applications: Arc::new(aihub_persistence::pg_core::PgApplicationRepository::new(
+                pool.clone(),
+            )),
+            api_keys: Arc::new(aihub_persistence::pg_core::PgApiKeyRepository::new(pool.clone())),
+            quota: Arc::new(aihub_persistence::pg_core::PgQuotaRepository::new(pool.clone())),
+            requests: Arc::new(aihub_persistence::pg_platform::PgRequestRepository::new(pool.clone())),
+            usage: Arc::new(aihub_persistence::pg_platform::PgUsageRepository::new(pool.clone())),
+            audit: Arc::new(aihub_persistence::pg_platform::PgAuditRepository::new(pool.clone())),
+            prompts: Arc::new(aihub_persistence::pg_platform::PgPromptRepository::new(pool.clone())),
+            users: Arc::new(aihub_persistence::pg_platform::PgUserRepository::new(pool.clone())),
+            // M12+ 平台域 V1 复用 SQLite 文件（server 模式存 data_dir），PG 版本随后续里程碑接入
+            knowledge: Arc::new(aihub_persistence::SqliteKnowledgeRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+            tools: Arc::new(aihub_persistence::SqliteToolRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+            mcp_servers: Arc::new(aihub_persistence::SqliteMcpServerRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+            agents: Arc::new(aihub_persistence::SqliteAgentRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+            evals: Arc::new(aihub_persistence::SqliteEvalRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+            policies: Arc::new(aihub_persistence::SqlitePolicyRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
+        });
+    }
     let pool = aihub_persistence::open_sqlite(&config.db_path()).await?;
-
-    let repos = Repos {
-        providers: Arc::new(aihub_persistence::SqliteProviderRepository::new(
-            pool.clone(),
-        )),
+    Ok(Repos {
+        providers: Arc::new(aihub_persistence::SqliteProviderRepository::new(pool.clone())),
         provider_health: Arc::new(aihub_persistence::SqliteProviderHealthRepository::new(
             pool.clone(),
         )),
@@ -123,24 +166,26 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         )),
         api_keys: Arc::new(aihub_persistence::SqliteApiKeyRepository::new(pool.clone())),
         quota: Arc::new(aihub_persistence::SqliteQuotaRepository::new(pool.clone())),
-        requests: Arc::new(aihub_persistence::SqliteRequestRepository::new(
-            pool.clone(),
-        )),
+        requests: Arc::new(aihub_persistence::SqliteRequestRepository::new(pool.clone())),
         usage: Arc::new(aihub_persistence::SqliteUsageRepository::new(pool.clone())),
         audit: Arc::new(aihub_persistence::SqliteAuditRepository::new(pool.clone())),
         prompts: Arc::new(aihub_persistence::SqlitePromptRepository::new(pool.clone())),
         users: Arc::new(aihub_persistence::SqliteUserRepository::new(pool.clone())),
-        knowledge: Arc::new(aihub_persistence::SqliteKnowledgeRepository::new(
-            pool.clone(),
-        )),
+        knowledge: Arc::new(aihub_persistence::SqliteKnowledgeRepository::new(pool.clone())),
         tools: Arc::new(aihub_persistence::SqliteToolRepository::new(pool.clone())),
-        mcp_servers: Arc::new(aihub_persistence::SqliteMcpServerRepository::new(
-            pool.clone(),
-        )),
+        mcp_servers: Arc::new(aihub_persistence::SqliteMcpServerRepository::new(pool.clone())),
         agents: Arc::new(aihub_persistence::SqliteAgentRepository::new(pool.clone())),
         evals: Arc::new(aihub_persistence::SqliteEvalRepository::new(pool.clone())),
         policies: Arc::new(aihub_persistence::SqlitePolicyRepository::new(pool.clone())),
-    };
+    })
+}
+
+pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
+    aihub_telemetry::init(&config.telemetry.log_level);
+    tracing::info!(target: "aihub::core", version = VERSION, mode = ?config.mode, "starting AI Hub core");
+
+    // SQLite（Desktop 默认）/ PostgreSQL（Server 生产，M10）按 database.driver 选择。
+    let repos = build_repos(&config).await?;
 
     // SecretStore（方案 §21.3）：Desktop 默认 OS Keychain；开发/CI 可选 memory；
     // Server 可选 env。macOS 上读取未签名二进制写入的钥匙串条目会触发授权弹窗，

@@ -15,5 +15,9 @@ thiserror.workspace = true
 tracing.workspace = true
 uuid.workspace = true
 
+[features]
+default = ["postgres"]
+postgres = ["sqlx/postgres", "sqlx/json", "sqlx/chrono"]
+
 [dev-dependencies]
 tokio.workspace = true

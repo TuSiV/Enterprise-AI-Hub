@@ -5,6 +5,10 @@ mod applications;
 mod audit;
 mod models;
 mod platform_store;
+#[cfg(feature = "postgres")]
+pub mod pg_core;
+#[cfg(feature = "postgres")]
+pub mod pg_platform;
 mod prompt_iam;
 mod providers;
 mod requests;
@@ -117,3 +121,6 @@ pub(crate) fn db_error(
         other => aihub_domain::DomainError::internal(resource, format!("db error: {other}")),
     }
 }
+
+#[cfg(feature = "postgres")]
+pub use pg_core::open_postgres;
