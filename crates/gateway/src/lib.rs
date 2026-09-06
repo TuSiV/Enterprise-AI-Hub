@@ -60,25 +60,35 @@ pub fn pipeline_error_response(err: &PipelineError) -> Response {
     (status, Json(body)).into_response()
 }
 
+/// 本地错误包装：实现 IntoResponse（孤儿规则要求类型定义在本 crate）。
+struct GatewayError(PipelineError);
+
+impl axum::response::IntoResponse for GatewayError {
+    fn into_response(self) -> Response {
+        pipeline_error_response(&self.0)
+    }
+}
+
 async fn authenticate(
     state: &GatewayState,
     headers: &HeaderMap,
-) -> Result<aihub_application::pipeline::AuthContext, Response> {
+) -> Result<aihub_application::pipeline::AuthContext, GatewayError> {
     let bearer = headers
         .get(axum::http::header::AUTHORIZATION)
         .and_then(|v| v.to_str().ok())
         .and_then(|v| v.strip_prefix("Bearer "))
         .map(|s| s.trim().to_string());
     let Some(bearer) = bearer else {
-        return Err(pipeline_error_response(&PipelineError::new(
+        return Err(GatewayError(PipelineError::new(
             aihub_application::error::GatewayCode::Unauthorized,
             "missing Authorization: Bearer <application api key>",
         )));
     };
-    match state.pipeline.authenticate_key(&bearer).await {
-        Ok(ctx) => Ok(ctx),
-        Err(e) => Err(pipeline_error_response(&e)),
-    }
+    state
+        .pipeline
+        .authenticate_key(&bearer)
+        .await
+        .map_err(GatewayError)
 }
 
 /// 扩展响应头（§11.4）
@@ -107,12 +117,12 @@ fn aih_headers(
 async fn list_models(
     State(state): State<GatewayState>,
     headers: HeaderMap,
-) -> Result<Response, Response> {
+) -> Result<Response, GatewayError> {
     let ctx = authenticate(&state, &headers).await?;
-    models_list::list_models(&state, &ctx)
+    let response = models_list::list_models(&state, &ctx)
         .await
-        .map(|response| Json(response).into_response())
-        .map_err(|e| pipeline_error_response(&e))
+        .map_err(GatewayError)?;
+    Ok(Json(response).into_response())
 }
 
 async fn chat_completions(
@@ -122,7 +132,7 @@ async fn chat_completions(
 ) -> Response {
     let ctx = match authenticate(&state, &headers).await {
         Ok(ctx) => ctx,
-        Err(response) => return response,
+        Err(e) => return e.into_response(),
     };
     let stream = request.is_stream();
     let model_name = request.model.clone();
@@ -473,7 +483,7 @@ async fn embeddings_handler(
 ) -> Response {
     let ctx = match authenticate(&state, &headers).await {
         Ok(ctx) => ctx,
-        Err(response) => return response,
+        Err(e) => return e.into_response(),
     };
     match execute_embeddings(&state, &ctx, request).await {
         Ok(response) => Json(response).into_response(),
