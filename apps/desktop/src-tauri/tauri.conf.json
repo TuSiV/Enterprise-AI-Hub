@@ -18,7 +18,22 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["dmg", "app"],
-    "icon": []
+    "targets": [
+      "dmg",
+      "app"
+    ],
+    "icon": [],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": [
+        "https://updates.example.com/aihub/{{target}}/{{current_version}}"
+      ],
+      "pubkey": "REPLACE_WITH_RELEASE_PUBKEY (tauri signer generate -w ~/.tauri/aihub.key)",
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

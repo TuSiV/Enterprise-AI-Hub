@@ -12,5 +12,6 @@ aihub-config.workspace = true
 aihub-server.workspace = true
 axum.workspace = true
 tauri = { version = "2", features = [] }
+serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true

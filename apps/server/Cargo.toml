@@ -43,6 +43,7 @@ tracing.workspace = true
 
 [dev-dependencies]
 futures.workspace = true
+jsonwebtoken = "9"
 reqwest.workspace = true
 uuid.workspace = true
 tower = { workspace = true, features = ["util"] }

@@ -231,12 +231,34 @@ impl IamService {
     /// token 校验依赖 IdP 的 JWKS 端点（Server 部署配置 issuer/claient 凭据后启用）。
     pub async fn identity_from_oidc(
         &self,
+        jwks_url: &str,
+        id_token: &str,
+        expected_issuer: &str,
+        expected_audience: &str,
+    ) -> Result<User, DomainError> {
+        let claims =
+            verify_oidc_id_token(jwks_url, id_token, expected_issuer, expected_audience).await?;
+        let subject = claims
+            .get("sub")
+            .and_then(|v| v.as_str())
+            .ok_or_else(|| DomainError::validation(DomainResource::User, "id_token missing sub"))?
+            .to_string();
+        let email = claims
+            .get("email")
+            .and_then(|v| v.as_str())
+            .map(|s| s.to_string());
+        self.identity_from_oidc_subject("oidc", &subject, email.as_deref())
+            .await
+    }
+
+    /// OIDC 身份映射 + 自动建号（issuer 已在上游验签时校验）。
+    async fn identity_from_oidc_subject(
+        &self,
         issuer: &str,
         subject: &str,
         email: Option<&str>,
     ) -> Result<User, DomainError> {
-        let _ = issuer; // token 校验由反代/网关完成，此处只做身份映射
-        if let Some(user) = self.repos.users.get_by_subject("oidc", subject).await? {
+        if let Some(user) = self.repos.users.get_by_subject(issuer, subject).await? {
             return Ok(user);
         }
         let user = self
@@ -288,6 +310,69 @@ pub fn role_has_permission_static(role_key: &str, permission: &str) -> bool {
         }
     }
     false
+}
+
+/// OIDC id_token 验签：拉取 IdP JWKS（短 TTL 缓存），RS256 验签 + iss/aud 校验。
+async fn verify_oidc_id_token(
+    jwks_url: &str,
+    id_token: &str,
+    expected_issuer: &str,
+    expected_audience: &str,
+) -> Result<serde_json::Value, DomainError> {
+    use jsonwebtoken::{decode, decode_header, DecodingKey, Validation};
+
+    let header = decode_header(id_token).map_err(|e| {
+        DomainError::validation(
+            DomainResource::User,
+            format!("invalid id_token header: {e}"),
+        )
+    })?;
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(10))
+        .build()
+        .map_err(|e| DomainError::internal(DomainResource::User, e.to_string()))?;
+    let jwks: serde_json::Value = client
+        .get(jwks_url)
+        .send()
+        .await
+        .map_err(|e| {
+            DomainError::internal(DomainResource::User, format!("jwks fetch failed: {e}"))
+        })?
+        .json()
+        .await
+        .map_err(|e| {
+            DomainError::internal(DomainResource::User, format!("jwks parse failed: {e}"))
+        })?;
+
+    let kid = header.kid.unwrap_or_default();
+    let jwk_value = jwks
+        .get("keys")
+        .and_then(|keys| keys.as_array())
+        .and_then(|keys| {
+            keys.iter()
+                .find(|k| k.get("kid").and_then(|v| v.as_str()) == Some(kid.as_str()))
+                .or_else(|| keys.first())
+        })
+        .cloned()
+        .ok_or_else(|| {
+            DomainError::validation(DomainResource::User, "no matching JWK for id_token")
+        })?;
+    let jwk: jsonwebtoken::jwk::Jwk = serde_json::from_value(jwk_value)
+        .map_err(|e| DomainError::validation(DomainResource::User, format!("invalid JWK: {e}")))?;
+
+    let decoding_key = DecodingKey::from_jwk(&jwk).map_err(|e| {
+        DomainError::validation(DomainResource::User, format!("jwk decode failed: {e}"))
+    })?;
+    let mut validation = Validation::new(header.alg);
+    validation.set_issuer(&[expected_issuer]);
+    validation.set_audience(&[expected_audience]);
+    let data = decode::<serde_json::Value>(id_token, &decoding_key, &validation).map_err(|e| {
+        DomainError::validation(
+            DomainResource::User,
+            format!("id_token verification failed: {e}"),
+        )
+    })?;
+    Ok(data.claims)
 }
 
 #[cfg(test)]
