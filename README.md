@@ -2,8 +2,6 @@
 
 # Enterprise AI Hub
 
-[English](README_EN.md) | 简体中文
-
 ### 企业统一 AI 基础设施 · AI Control Plane
 
 **所有模型统一接入 · 所有应用统一调用 · 所有路由统一治理 · 所有使用统一计量 · 所有行为统一审计**
@@ -113,6 +111,26 @@
 | 桌面端外部依赖 | — | 视实现而定 | ✅ 零 Docker / PostgreSQL / Redis |
 
 > 定位：不是又一个聊天客户端，而是模型接入、路由、计量、审计的**统一基础设施层**——业务系统只需换一行 `base_url`。
+
+### 对比 New API
+
+[New API](https://github.com/QuantumNous/new-api)（原 One API 衍生，⭐ 46k+）是社区里非常成熟的开源大模型网关，尤其在**格式互转**（OpenAI/Claude/Gemini 互转）和**中转分发**场景做得很深。二者定位不同，供参考：
+
+| | New API | **Enterprise AI Hub** |
+|---|:---:|:---:|
+| 多模型接入 / 格式互转 | ✅ OpenAI/Claude/Gemini 互转，覆盖 Midjourney、Suno、Rerank 等 | ✅ OpenAI 兼容 Adapter，聚焦企业业务系统接入 |
+| 智能路由 | ✅ 渠道加权随机 + 失败重试 + 用户级限流 | ✅ Virtual Model 抽象 + 优先级 Failover + 熔断器 |
+| 用量与成本核算 | ✅ 按次/按量/缓存命中计费，运营级数据看板 | ✅ Token/成本 microunits + P95/TTFT，按模型/应用聚合 |
+| 权限与治理 | ⚠️ 令牌分组、模型限制、用户管理 | ✅ RBAC 多用户 + 数据分级路由矩阵 + DLP 脱敏 + SSRF 校验 |
+| 全量行为审计 | ⚠️ 错误日志（`ERROR_LOG_ENABLED`），非面向合规的全量审计 | ✅ 全链路请求/Agent 行为审计 |
+| 知识库 RAG（带引用） | ❌ | ✅ 解析 → Embedding → 混合检索 → 带引用回答 |
+| Agent / MCP（权限强制隔离） | ❌ | ✅ 版本化循环执行 + 工具白名单，权限由 Core 强制交集 |
+| 模型评测（Rule + LLM Judge） | ❌ | ✅ 数据集 → 多候选 → 成本/延迟回归对比 |
+| 内置充值 / 分发转售 | ✅ 易支付、Stripe，面向个人/中转分发 | — （不做面向公众的转售计费，聚焦企业内部治理） |
+| 部署形态 | Docker / Docker Compose / 宝塔面板（服务端） | Desktop（零 Docker/PG/Redis 依赖）/ Server / Connected 三态 |
+| 开源协议 | AGPLv3（衍生使用需遵循开源义务或联系商用授权） | Apache-2.0 |
+
+> 简单说：如果你要的是**个人/团队中转多家模型 API、按量转售或充值分发**，New API 的生态和格式覆盖非常成熟；如果你要的是**企业内部统一治理**——RBAC、数据分级、DLP、审计合规，外加知识库 RAG 和受控 Agent/MCP 执行——Enterprise AI Hub 是围绕这个目标设计的。两者并不完全互斥的竞品，更像是面向不同场景的工具。
 
 ---
 
