@@ -15,7 +15,7 @@
 //! PostgreSQL Repository Contract Test（M1/M10 验收：同一测试集在 SQLite/Postgres 通过）。
 //! 默认 #[ignore]：需要 TEST_DATABASE_URL（如 postgres://postgres:postgres@localhost/aihub_test）。
 //! CI 中由 postgres service 提供；本地 `docker run postgres` 后运行：
-//!   TEST_DATABASE_URL=... cargo test -p aihub-persistence --test pg_contract -- --ignored
+//!   TEST_DATABASE_URL=... cargo test -p aihub-persistence --test pg_contract -- --ignored --test-threads=1
 
 #![cfg(feature = "postgres")]
 

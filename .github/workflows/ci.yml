@@ -59,7 +59,7 @@ jobs:
       - name: Test (PostgreSQL contract)
         env:
           TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/aihub_test
-        run: cargo test -p aihub-persistence --test pg_contract -- --ignored
+        run: cargo test -p aihub-persistence --test pg_contract -- --ignored --test-threads=1
 
   # Desktop 壳（Tauri 2）：Linux 下编译需要 WebKit/GTK 系统栈，单独 job 验证编译
   desktop:
