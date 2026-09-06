@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api, qs } from '../api/client'
 import type { RequestListItem, RequestDetail } from '../api/types'
@@ -17,7 +18,7 @@ export default function Requests() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'err') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 2600)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 2600)
   }
 
   const load = () =>
@@ -27,7 +28,7 @@ export default function Requests() {
     })
 
   useEffect(() => {
-    load().finally(() => setLoading(false))
+    load().catch((e) => notify(e.message, 'err')).finally(() => setLoading(false))
   }, [page, status, model])
 
   const openDetail = async (id: string) => {
@@ -44,26 +45,26 @@ export default function Requests() {
     <>
       <div className="page-head">
         <div>
-          <h2>请求记录</h2>
-          <div className="page-sub">每次经过 Gateway 的 AI 请求：模型解析、延迟、Token 与成本</div>
+          <h2>{t("请求记录")}</h2>
+          <div className="page-sub">{t("每次经过 Gateway 的 AI 请求：模型解析、延迟、Token 与成本")}</div>
         </div>
       </div>
 
       <Card>
         <div className="filters">
           <select value={status} onChange={(e) => { setStatus(e.target.value); setPage(1) }}>
-            <option value="">全部状态</option>
+            <option value="">{t("全部状态")}</option>
             {['completed', 'failed', 'client_cancelled', 'timeout', 'running'].map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
-          <input value={model} onChange={(e) => { setModel(e.target.value); setPage(1) }} placeholder="按模型过滤" style={{ width: 200 }} />
+          <input value={model} onChange={(e) => { setModel(e.target.value); setPage(1) }} placeholder={t("按模型过滤")} style={{ width: 200 }} />
         </div>
         {loading ? (
           <Spinner />
         ) : items.length ? (
           <>
-            <Table head={['时间', '应用', '请求模型', '实际模型', 'Provider', '状态', '延迟', 'TTFT', 'Tokens', '成本', '错误']}>
+            <Table head={[t("时间"), t("应用"), t("请求模型"), t("实际模型"), 'Provider', t("状态"), t("延迟"), 'TTFT', 'Tokens', t("成本"), t("错误")]}>
               {items.map((r) => (
                 <tr key={r.id} className="clickable" onClick={() => openDetail(r.id)}>
                   <td className="dim">{formatTime(r.startedAt)}</td>
@@ -84,24 +85,21 @@ export default function Requests() {
             </Table>
             <div className="pagination">
               <span>
-                共 {total} 条 · 第 {page}/{pages} 页
-              </span>
+                {t('共 {0} 条 · 第 {1}/{2} 页', [total, page, pages])}</span>
               <Button variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                上一页
-              </Button>
+                {t("上一页")}</Button>
               <Button variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>
-                下一页
-              </Button>
+                {t("下一页")}</Button>
             </div>
           </>
         ) : (
-          <EmptyState title="暂无请求" hint="通过 /v1/chat/completions 发起一次调用后在此查看" />
+          <EmptyState title={t("暂无请求")} hint={t("通过 /v1/chat/completions 发起一次调用后在此查看")} />
         )}
       </Card>
 
       {detail && (
-        <Modal title={`请求详情`} onClose={() => setDetail(null)} wide>
-          <Table head={['字段', '值']}>
+        <Modal title={t("请求详情")} onClose={() => setDetail(null)} wide>
+          <Table head={[t("字段"), t("值")]}>
             <tr>
               <td className="dim">Request ID</td>
               <td className="mono">{detail.id}</td>
@@ -111,26 +109,26 @@ export default function Requests() {
               <td className="mono">{detail.traceId ?? '-'}</td>
             </tr>
             <tr>
-              <td className="dim">请求模型 → 实际模型</td>
+              <td className="dim">{t("请求模型 → 实际模型")}</td>
               <td className="mono">
                 {detail.requestedModel} → {detail.resolvedModelKey ?? '-'}
               </td>
             </tr>
             <tr>
-              <td className="dim">状态 / HTTP</td>
+              <td className="dim">{t("状态 / HTTP")}</td>
               <td>
                 <StatusBadge status={detail.status} /> <span className="mono dim">{detail.httpStatus ?? ''}</span>
               </td>
             </tr>
             <tr>
-              <td className="dim">延迟 / TTFT / 重试</td>
+              <td className="dim">{t("延迟 / TTFT / 重试")}</td>
               <td>
                 {detail.latencyMs ?? '-'} ms / {detail.ttftMs ?? '-'} ms / {detail.retryCount}
               </td>
             </tr>
             {detail.errorMessage && (
               <tr>
-                <td className="dim">错误</td>
+                <td className="dim">{t("错误")}</td>
                 <td className="mono">{detail.errorMessage}</td>
               </tr>
             )}
@@ -143,7 +141,7 @@ export default function Requests() {
           )}
           {detail.cost && (
             <>
-              <h4 style={{ margin: '14px 0 8px' }}>Cost（含计费快照）</h4>
+              <h4 style={{ margin: '14px 0 8px' }}>{t("Cost（含计费快照）")}</h4>
               <pre className="json">{JSON.stringify(detail.cost, null, 2)}</pre>
             </>
           )}

@@ -232,5 +232,5 @@ export function formatTokens(n: number | null | undefined): string {
 
 export function formatTime(iso: string | null | undefined): string {
   if (!iso) return '-'
-  return new Date(iso).toLocaleString()
+  return new Date(iso).toLocaleString(document.documentElement.lang)
 }

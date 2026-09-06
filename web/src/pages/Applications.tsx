@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import type { ApplicationDto, ApiKeyDto, VirtualModelDto, QuotaInput } from '../api/types'
@@ -15,7 +16,7 @@ export default function Applications() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 2600)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 2600)
   }
 
   const load = () =>
@@ -27,37 +28,36 @@ export default function Applications() {
     )
 
   useEffect(() => {
-    load().finally(() => setLoading(false))
+    load().catch((e) => notify(e.message, 'err')).finally(() => setLoading(false))
   }, [])
 
   const remove = async (app: ApplicationDto) => {
-    if (!confirm(`删除应用「${app.name}」及其全部 API Key？`)) return
+    if (!confirm(t("删除应用「{0}」及其全部 API Key？", [app.name]))) return
     try {
       await api.del(`/api/v1/admin/applications/${app.id}`)
-      notify('已删除')
+      notify(t("已删除"))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
     }
   }
 
-  if (loading) return <Spinner label="加载中…" />
+  if (loading) return <Spinner label={t("加载中…")} />
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h2>应用与 API Key</h2>
-          <div className="page-sub">业务系统通过 Application API Key 调用 Gateway；支持模型白名单与配额</div>
+          <h2>{t("应用与 API Key")}</h2>
+          <div className="page-sub">{t("业务系统通过 Application API Key 调用 Gateway；支持模型白名单与配额")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 创建应用
-        </Button>
+          {t("+ 创建应用")}</Button>
       </div>
 
       <Card>
         {apps.length ? (
-          <Table head={['应用', 'Key', '允许的 Virtual Models', '直连模型', 'Key 数', '状态', '操作']}>
+          <Table head={[t("应用"), 'Key', t("允许的 Virtual Models"), t("直连模型"), t("Key 数"), t("状态"), t("操作")]}>
             {apps.map((app) => (
               <tr key={app.id}>
                 <td>
@@ -66,9 +66,9 @@ export default function Applications() {
                 </td>
                 <td className="mono dim">{app.key}</td>
                 <td className="dim">
-                  {app.allowedVirtualModels.length ? app.allowedVirtualModels.map((k) => <Badge key={k}>{k}</Badge>) : '全部'}
+                  {app.allowedVirtualModels.length ? app.allowedVirtualModels.map((k) => <Badge key={k}>{k}</Badge>) : t("全部")}
                 </td>
-                <td>{app.allowDirectModels ? <Badge tone="warn">允许</Badge> : <Badge tone="muted">禁止</Badge>}</td>
+                <td>{app.allowDirectModels ? <Badge tone="warn">{t("允许")}</Badge> : <Badge tone="muted">{t("禁止")}</Badge>}</td>
                 <td>{app.keyCount}</td>
                 <td>
                   <StatusBadge status={app.status} />
@@ -79,23 +79,21 @@ export default function Applications() {
                       API Keys
                     </Button>
                     <Button variant="ghost" onClick={() => setEditing(app)}>
-                      编辑
-                    </Button>
+                      {t("编辑")}</Button>
                     <Button variant="ghost" onClick={() => remove(app)}>
-                      删除
-                    </Button>
+                      {t("删除")}</Button>
                   </div>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="暂无应用" />
+          <EmptyState title={t("暂无应用")} />
         )}
       </Card>
 
-      {creating && <AppForm vms={vms} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); notify('已创建'); load() }} />}
-      {editing && <AppForm vms={vms} app={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); notify('已保存'); load() }} />}
+      {creating && <AppForm vms={vms} onClose={() => setCreating(false)} onSaved={() => { setCreating(false); notify(t("已创建")); load() }} />}
+      {editing && <AppForm vms={vms} app={editing} onClose={() => setEditing(null)} onSaved={() => { setEditing(null); notify(t("已保存")); load() }} />}
       {keysOf && <KeysPanel app={keysOf} onClose={() => setKeysOf(null)} onChanged={load} />}
       <Toast message={toast.message} tone={toast.tone} />
     </>
@@ -103,7 +101,7 @@ export default function Applications() {
 }
 
 function StatusBadge({ status }: { status: string }) {
-  return status === 'active' ? <Badge tone="ok">启用</Badge> : <Badge tone="muted">{status}</Badge>
+  return status === 'active' ? <Badge tone="ok">{t("启用")}</Badge> : <Badge tone="muted">{status}</Badge>
 }
 
 function AppForm({
@@ -167,16 +165,16 @@ function AppForm({
   }
 
   return (
-    <Modal title={app ? `编辑 ${app.name}` : '创建应用'} onClose={onClose}>
+    <Modal title={app ? t("编辑 {0}", [app.name]) : t("创建应用")} onClose={onClose}>
       {!app && (
-        <Field label="Key" hint="应用稳定标识，例如 legal-platform">
+        <Field label="Key" hint={t("应用稳定标识，例如 legal-platform")}>
           <input value={key} onChange={(e) => setKey(e.target.value)} />
         </Field>
       )}
-      <Field label="名称">
+      <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <Field label="允许的 Virtual Models" hint="不勾选任何 = 允许全部">
+      <Field label={t("允许的 Virtual Models")} hint={t("不勾选任何 = 允许全部")}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {vms.map((vm) => (
             <label key={vm.key} style={{ fontSize: 13 }}>
@@ -185,27 +183,26 @@ function AppForm({
           ))}
         </div>
       </Field>
-      <Field label="允许直连物理模型">
+      <Field label={t("允许直连物理模型")}>
         <label style={{ fontSize: 13 }}>
-          <input type="checkbox" checked={allowDirect} onChange={(e) => setAllowDirect(e.target.checked)} /> 允许（仅管理/调试场景建议开启）
-        </label>
+          <input type="checkbox" checked={allowDirect} onChange={(e) => setAllowDirect(e.target.checked)} /> {t("允许（仅管理/调试场景建议开启）")}</label>
       </Field>
       <div className="field-row">
-        <Field label="月度预算（microunits）" hint="1 USD = 1,000,000">
-          <input value={budget} onChange={(e) => setBudget(e.target.value)} placeholder="如 5000000 = 5 USD" />
+        <Field label={t("月度预算（microunits）")} hint="1 USD = 1,000,000">
+          <input value={budget} onChange={(e) => setBudget(e.target.value)} placeholder={t("如 5000000 = 5 USD")} />
         </Field>
-        <Field label="RPM（每分钟请求数）">
-          <input value={rpm} onChange={(e) => setRpm(e.target.value)} placeholder="如 60" />
+        <Field label={t("RPM（每分钟请求数）")}>
+          <input value={rpm} onChange={(e) => setRpm(e.target.value)} placeholder={t("如 60")} />
         </Field>
       </div>
-      <Field label="月度成本上限（microunits）">
+      <Field label={t("月度成本上限（microunits）")}>
         <input value={monthlyCost} onChange={(e) => setMonthlyCost(e.target.value)} />
       </Field>
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <Button onClick={onClose}>取消</Button>
+        <Button onClick={onClose}>{t("取消")}</Button>
         <Button variant="primary" onClick={save} disabled={saving || (!app && !key)}>
-          {saving ? '保存中…' : '保存'}
+          {saving ? t("保存中…") : t("保存")}
         </Button>
       </div>
     </Modal>
@@ -241,7 +238,7 @@ function KeysPanel({ app, onClose, onChanged }: { app: ApplicationDto; onClose: 
   }
 
   const revoke = async (k: ApiKeyDto) => {
-    if (!confirm(`撤销 Key ${k.maskedKey}？撤销后使用该 Key 的请求立即被拒绝。`)) return
+    if (!confirm(t("撤销 Key {0}？撤销后使用该 Key 的请求立即被拒绝。", [k.maskedKey]))) return
     try {
       await api.del(`/api/v1/admin/applications/${app.id}/keys/${k.id}`)
       load()
@@ -255,8 +252,7 @@ function KeysPanel({ app, onClose, onChanged }: { app: ApplicationDto; onClose: 
     <Modal title={`API Keys · ${app.name}`} onClose={onClose} wide>
       {plaintext && (
         <div className="key-reveal">
-          <b>请立即保存此 Key</b> — 关闭后无法再次查看（服务端仅存 hash）。
-          <code>{plaintext}</code>
+          <b>{t("请立即保存此 Key")}</b> {t("— 关闭后无法再次查看（服务端仅存 hash）。")}<code>{plaintext}</code>
           <Button
             variant="primary"
             onClick={() => {
@@ -264,32 +260,30 @@ function KeysPanel({ app, onClose, onChanged }: { app: ApplicationDto; onClose: 
               setCopied(true)
             }}
           >
-            {copied ? '已复制 ✓' : '复制 Key'}
+            {copied ? t("已复制 ✓") : t("复制 Key")}
           </Button>
         </div>
       )}
-      <Table head={['名称', 'Key', '最近使用', '创建时间', '状态', '操作']}>
+      <Table head={[t("名称"), 'Key', t("最近使用"), t("创建时间"), t("状态"), t("操作")]}>
         {keys.map((k) => (
           <tr key={k.id}>
             <td>{k.name}</td>
             <td className="mono">{k.maskedKey}</td>
             <td className="dim">{formatTime(k.lastUsedAt)}</td>
             <td className="dim">{formatTime(k.createdAt)}</td>
-            <td>{k.revokedAt ? <Badge tone="err">已撤销</Badge> : <Badge tone="ok">有效</Badge>}</td>
-            <td>{!k.revokedAt && <Button variant="ghost" onClick={() => revoke(k)}>撤销</Button>}</td>
+            <td>{k.revokedAt ? <Badge tone="err">{t("已撤销")}</Badge> : <Badge tone="ok">{t("有效")}</Badge>}</td>
+            <td>{!k.revokedAt && <Button variant="ghost" onClick={() => revoke(k)}>{t("撤销")}</Button>}</td>
           </tr>
         ))}
       </Table>
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ marginTop: 12 }}>
         <Button variant="primary" onClick={() => setCreating(true)} disabled={creating}>
-          + 创建新 Key
-        </Button>
-        {creating && <span className="dim" style={{ marginLeft: 10 }}>确认创建？<Button variant="ghost" onClick={create}>确认</Button></span>}
+          {t("+ 创建新 Key")}</Button>
+        {creating && <span className="dim" style={{ marginLeft: 10 }}>{t("确认创建？")}<Button variant="ghost" onClick={create}>{t("确认")}</Button></span>}
       </div>
       <p className="dim" style={{ fontSize: 12 }}>
-        支持 Key 滚动：先创建新 Key → 应用切换 → 验证 → 撤销旧 Key（方案 §14.5）。
-      </p>
+        {t("支持 Key 滚动：先创建新 Key → 应用切换 → 验证 → 撤销旧 Key。")}</p>
     </Modal>
   )
 }

@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { VirtualModelDto, ModelDto, UsageSummary } from '../api/types'
@@ -38,7 +39,7 @@ export default function Playground() {
   const [temperature, setTemperature] = useState('0.7')
   const [maxTokens, setMaxTokens] = useState('')
   const [stream, setStream] = useState(true)
-  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'user', content: '你好，请介绍一下你自己。' }])
+  const [messages, setMessages] = useState<ChatMsg[]>([{ role: 'user', content: t("你好，请介绍一下你自己。") }])
   const [input, setInput] = useState('')
   const [running, setRunning] = useState(false)
   const [reply, setReply] = useState('')
@@ -56,7 +57,7 @@ export default function Playground() {
       setModels(m)
       const first = v.find((x) => x.enabled && x.targets.length > 0) ?? v[0]
       if (first) setModel(first.key)
-    })
+    }).catch(e => setError(e.message))
   }, [])
 
   useEffect(() => {
@@ -104,7 +105,7 @@ export default function Playground() {
         })
         if (!res.ok || !res.body) {
           const errBody = await res.json().catch(() => ({}))
-          throw new Error(errBody?.error?.message ?? `请求失败 (${res.status})`)
+          throw new Error(errBody?.error?.message ?? t("请求失败 ({0})", [res.status]))
         }
         const reader = res.body.getReader()
         const decoder = new TextDecoder()
@@ -176,7 +177,7 @@ export default function Playground() {
     if (comparing || !input.trim()) return
     const models = candidates.split(',').map((m) => m.trim()).filter(Boolean)
     if (models.length < 2) {
-      setError('请输入至少两个候选模型（逗号分隔）')
+      setError(t("请输入至少两个候选模型（逗号分隔）"))
       return
     }
     setComparing(true)
@@ -223,15 +224,15 @@ export default function Playground() {
     <>
       <div className="page-head">
         <div>
-          <h2>Playground</h2>
-          <div className="page-sub">与 Virtual Model / 物理模型直接对话；请求走同一条 Gateway 流水线（含计量与审计）</div>
+          <h2>{t('试验场')}</h2>
+          <div className="page-sub">{t("与 Virtual Model / 物理模型直接对话；请求走同一条 Gateway 流水线（含计量与审计）")}</div>
         </div>
       </div>
 
       <div className="pg-layout">
         <div>
-          <Card title="请求配置">
-            <Field label="模型">
+          <Card title={t("请求配置")}>
+            <Field label={t("模型")}>
               <select value={model} onChange={(e) => setModel(e.target.value)}>
                 {uniqueOptions.map((o) => (
                   <option key={o.value} value={o.value}>
@@ -241,29 +242,27 @@ export default function Playground() {
               </select>
             </Field>
             <Field label="System Prompt">
-              <textarea value={system} onChange={(e) => setSystem(e.target.value)} rows={3} placeholder="你是一个专业的…" />
+              <textarea value={system} onChange={(e) => setSystem(e.target.value)} rows={3} placeholder={t("你是一个专业的…")} />
             </Field>
             <div className="field-row">
               <Field label="Temperature">
                 <input value={temperature} onChange={(e) => setTemperature(e.target.value)} />
               </Field>
               <Field label="Max Tokens">
-                <input value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} placeholder="默认不限制" />
+                <input value={maxTokens} onChange={(e) => setMaxTokens(e.target.value)} placeholder={t("默认不限制")} />
               </Field>
             </div>
-            <Field label="流式输出">
+            <Field label={t("流式输出")}>
               <label style={{ fontSize: 13 }}>
-                <input type="checkbox" checked={stream} onChange={(e) => setStream(e.target.checked)} /> SSE 流式
-              </label>
+                <input type="checkbox" checked={stream} onChange={(e) => setStream(e.target.checked)} /> {t("SSE 流式")}</label>
             </Field>
             <Button variant="ghost" onClick={reset}>
-              清空会话
-            </Button>
+              {t("清空会话")}</Button>
           </Card>
         </div>
 
         <div>
-          <Card title="对话">
+          <Card title={t("对话")}>
             <div className="pg-messages">
               {messages.map((m, i) => (
                 <div key={i} className="pg-msg">
@@ -276,7 +275,7 @@ export default function Playground() {
             </div>
             <div className="pg-msg">
               <div className="pg-role">
-                <span>user（输入）</span>
+                <span>{t("user（输入）")}</span>
               </div>
               <textarea
                 value={input}
@@ -284,36 +283,36 @@ export default function Playground() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) run()
                 }}
-                placeholder="输入消息，⌘/Ctrl+Enter 发送"
+                placeholder={t("输入消息，⌘/Ctrl+Enter 发送")}
               />
             </div>
             <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button variant="primary" onClick={run} disabled={running || !input.trim()}>
-                {running ? '生成中…' : '发送'}
+                {running ? t("生成中…") : t("发送")}
               </Button>
               <Button onClick={runCompare} disabled={comparing || !input.trim()}>
-                {comparing ? '对比中…' : 'Compare 多候选'}
+                {comparing ? t("对比中…") : t("Compare 多候选")}
               </Button>
             </div>
-            <Field label="Compare 候选（逗号分隔模型 key）">
+            <Field label={t("Compare 候选（逗号分隔模型 key）")}>
               <input value={candidates} onChange={(e) => setCandidates(e.target.value)} placeholder="general-fast, general-smart, mock-mini" />
             </Field>
           </Card>
-          <Card title="回复">
+          <Card title={t("回复")}>
             {error && <p style={{ color: 'var(--err)' }}>{error}</p>}
             <div className="pg-output" ref={outputRef}>
               {reasoning && <div className="reasoning">{reasoning}</div>}
-              {reply || <span className="dim">{running ? '…' : '回复将显示在这里'}</span>}
+              {reply || <span className="dim">{running ? '…' : t("回复将显示在这里")}</span>}
             </div>
           </Card>
         </div>
 
         <div>
-          <Card title="指标">
+          <Card title={t("指标")}>
             {/* 指标卡保持不变 */}
             <div className="pg-metrics">
               <div className="row">
-                <span className="dim">模型</span>
+                <span className="dim">{t("模型")}</span>
                 <span className="mono">{metrics?.resolvedModel ?? '-'}</span>
               </div>
               <div className="row">
@@ -321,7 +320,7 @@ export default function Playground() {
                 <span className="mono">{metrics?.provider ?? '-'}</span>
               </div>
               <div className="row">
-                <span className="dim">延迟</span>
+                <span className="dim">{t("延迟")}</span>
                 <span>{metrics?.latencyMs != null ? `${metrics.latencyMs} ms` : '-'}</span>
               </div>
               <div className="row">
@@ -329,21 +328,21 @@ export default function Playground() {
                 <span>{metrics?.ttftMs != null ? `${metrics.ttftMs} ms` : '-'}</span>
               </div>
               <div className="row">
-                <span className="dim">重试</span>
+                <span className="dim">{t("重试")}</span>
                 <span>{metrics?.retryCount ?? 0}</span>
               </div>
               <div className="row">
-                <span className="dim">输入 / 输出 Tokens</span>
+                <span className="dim">{t("输入 / 输出 Tokens")}</span>
                 <span>
                   {metrics?.usage?.input_tokens ?? '-'} / {metrics?.usage?.output_tokens ?? '-'}
                 </span>
               </div>
               <div className="row">
-                <span className="dim">Usage 来源</span>
+                <span className="dim">{t("Usage 来源")}</span>
                 <span>{metrics?.usage?.source === 'estimated' ? <Badge tone="warn">estimated</Badge> : <Badge tone="ok">provider</Badge>}</span>
               </div>
               <div className="row">
-                <span className="dim">成本</span>
+                <span className="dim">{t("成本")}</span>
                 <span>{formatCost(metrics?.costMicrounits)}</span>
               </div>
             </div>
@@ -352,8 +351,8 @@ export default function Playground() {
       </div>
 
       {compareResults && (
-        <Card title="Compare 对比结果（同一输入）">
-          <Table head={['候选', '结果', '延迟', 'Tokens', '成本']}>
+        <Card title={t("Compare 对比结果（同一输入）")}>
+          <Table head={[t("候选"), t("结果"), t("延迟"), 'Tokens', t("成本")]}>
             {compareResults.map((r) => (
               <tr key={r.model}>
                 <td className="mono">{r.model}</td>

@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api, qs } from '../api/client'
 import type { ProviderDto, ModelDto } from '../api/types'
@@ -8,8 +9,8 @@ const KINDS = [
   ['openai_compatible', 'OpenAI Compatible'],
   ['openai', 'OpenAI'],
   ['ollama', 'Ollama'],
-  ['anthropic', 'Anthropic（Adapter 待接入）'],
-  ['gemini', 'Gemini（Adapter 待接入）'],
+  ['anthropic', t("Anthropic（Adapter 待接入）")],
+  ['gemini', t("Gemini（Adapter 待接入）")],
 ]
 
 export default function Providers() {
@@ -22,13 +23,13 @@ export default function Providers() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 2600)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 2600)
   }
 
   const load = () => api.get<ProviderDto[]>('/api/v1/admin/providers').then(setProviders)
 
   useEffect(() => {
-    load().finally(() => setLoading(false))
+    load().catch((e) => notify(e.message, 'err')).finally(() => setLoading(false))
   }, [])
 
   const toggle = async (p: ProviderDto) => {
@@ -45,7 +46,7 @@ export default function Providers() {
       const r = await api.post<{ ok: boolean; latencyMs: number | null; error: string | null }>(
         `/api/v1/admin/providers/${p.id}/test`,
       )
-      notify(r.ok ? `连接正常（${r.latencyMs}ms）` : `失败：${r.error ?? 'unknown'}`, r.ok ? 'ok' : 'err')
+      notify(r.ok ? t("连接正常（{0}ms）", [r.latencyMs]) : t("失败：{0}", [r.error ?? 'unknown']), r.ok ? 'ok' : 'err')
       await load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -57,7 +58,7 @@ export default function Providers() {
       const r = await api.post<{ discovered: number; created: number; updated: number; models: ModelDto[] }>(
         `/api/v1/admin/providers/${p.id}/discover-models`,
       )
-      notify(`发现 ${r.discovered} 个模型（新增 ${r.created} / 更新 ${r.updated}）`)
+      notify(t("发现 {0} 个模型（新增 {1} / 更新 {2}）", [r.discovered, r.created, r.updated]))
       setDiscovered(r.models)
       await load()
     } catch (e: any) {
@@ -66,33 +67,32 @@ export default function Providers() {
   }
 
   const remove = async (p: ProviderDto) => {
-    if (!confirm(`删除 Provider「${p.name}」？`)) return
+    if (!confirm(t("删除 Provider「{0}」？", [p.name]))) return
     try {
       await api.del(`/api/v1/admin/providers/${p.id}`)
-      notify('已删除')
+      notify(t("已删除"))
       await load()
     } catch (e: any) {
       notify(e.message, 'err')
     }
   }
 
-  if (loading) return <Spinner label="加载中…" />
+  if (loading) return <Spinner label={t("加载中…")} />
 
   return (
     <>
       <div className="page-head">
         <div>
-          <h2>Providers</h2>
-          <div className="page-sub">统一接入模型提供方；凭据保存在系统 Secret Store（macOS Keychain）</div>
+          <h2>{t('服务商')}</h2>
+          <div className="page-sub">{t("统一接入模型提供方；凭据保存在系统 Secret Store（macOS Keychain）")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 添加 Provider
-        </Button>
+          {t("+ 添加 Provider")}</Button>
       </div>
 
       <Card>
         {providers.length ? (
-          <Table head={['名称', '类型', 'Base URL', '模型', '健康', '最近检测', '状态', '操作']}>
+          <Table head={[t("名称"), t("类型"), 'Base URL', t("模型"), t("健康"), t("最近检测"), t("状态"), t("操作")]}>
             {providers.map((p) => (
               <tr key={p.id}>
                 <td>
@@ -106,65 +106,61 @@ export default function Providers() {
                   <HealthBadge health={p.health} />
                 </td>
                 <td className="dim">{formatTime(p.lastHealthCheckAt)}</td>
-                <td>{p.enabled ? <Badge tone="ok">启用</Badge> : <Badge tone="muted">停用</Badge>}</td>
+                <td>{p.enabled ? <Badge tone="ok">{t("启用")}</Badge> : <Badge tone="muted">{t("停用")}</Badge>}</td>
                 <td>
                   <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
                     <Button variant="ghost" onClick={() => test(p)}>
-                      测试
-                    </Button>
+                      {t("测试")}</Button>
                     <Button variant="ghost" onClick={() => discover(p)}>
-                      发现模型
-                    </Button>
+                      {t("发现模型")}</Button>
                     <Button variant="ghost" onClick={() => setEditing(p)}>
-                      编辑
-                    </Button>
+                      {t("编辑")}</Button>
                     <Button variant="ghost" onClick={() => toggle(p)}>
-                      {p.enabled ? '停用' : '启用'}
+                      {p.enabled ? t("停用") : t("启用")}
                     </Button>
                     <Button variant="ghost" onClick={() => remove(p)}>
-                      删除
-                    </Button>
+                      {t("删除")}</Button>
                   </div>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="还没有 Provider" hint="添加一个 OpenAI 兼容 Provider 开始使用" />
+          <EmptyState title={t("还没有 Provider")} hint={t("添加一个 OpenAI 兼容 Provider 开始使用")} />
         )}
       </Card>
 
       {creating && (
         <ProviderForm
-          title="添加 Provider"
+          title={t("添加 Provider")}
           onClose={() => setCreating(false)}
           onSaved={(p) => {
             setCreating(false)
-            notify(`Provider「${p.name}」已创建`)
+            notify(t("Provider「{0}」已创建", [p.name]))
             load()
           }}
         />
       )}
       {editing && (
         <ProviderForm
-          title={`编辑 ${editing.name}`}
+          title={t("编辑 {0}", [editing.name])}
           provider={editing}
           onClose={() => setEditing(null)}
           onSaved={(p) => {
             setEditing(null)
-            notify(`Provider「${p.name}」已保存`)
+            notify(t("Provider「{0}」已保存", [p.name]))
             load()
           }}
         />
       )}
       {discovered && (
-        <Modal title="发现的模型" onClose={() => setDiscovered(null)} wide>
-          <Table head={['Model Key', '类型', '状态']}>
+        <Modal title={t("发现的模型")} onClose={() => setDiscovered(null)} wide>
+          <Table head={['Model Key', t("类型"), t("状态")]}>
             {discovered.map((m) => (
               <tr key={m.id}>
                 <td className="mono">{m.modelKey}</td>
                 <td>{m.modelType}</td>
-                <td>{m.enabled ? <Badge tone="ok">启用</Badge> : <Badge tone="muted">停用</Badge>}</td>
+                <td>{m.enabled ? <Badge tone="ok">{t("启用")}</Badge> : <Badge tone="muted">{t("停用")}</Badge>}</td>
               </tr>
             ))}
           </Table>
@@ -225,14 +221,14 @@ function ProviderForm({
   return (
     <Modal title={title} onClose={onClose}>
       {!provider && (
-        <Field label="Key（稳定标识）" hint="用于程序引用，例如 openai-primary">
+        <Field label={t("Key（稳定标识）")} hint={t("用于程序引用，例如 openai-primary")}>
           <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="openai-primary" />
         </Field>
       )}
-      <Field label="名称">
-        <input value={name} onChange={(e) => setName(e.target.value)} placeholder="显示名称" />
+      <Field label={t("名称")}>
+        <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("显示名称")} />
       </Field>
-      <Field label="类型">
+      <Field label={t("类型")}>
         <select value={kind} onChange={(e) => setKind(e.target.value)}>
           {KINDS.map(([v, l]) => (
             <option key={v} value={v}>
@@ -241,20 +237,20 @@ function ProviderForm({
           ))}
         </select>
       </Field>
-      <Field label="Base URL" hint="例如 https://api.openai.com/v1 或 http://127.0.0.1:11434/v1">
+      <Field label="Base URL" hint={t("例如 https://api.openai.com/v1 或 http://127.0.0.1:11434/v1")}>
         <input value={baseUrl} onChange={(e) => setBaseUrl(e.target.value)} placeholder="https://…/v1" />
       </Field>
-      <Field label={provider ? 'API Key（留空保持不变，填写即轮换）' : 'API Key'}>
-        <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={provider?.credentialConfigured ? '已配置' : 'sk-…'} />
+      <Field label={provider ? t("API Key（留空保持不变，填写即轮换）") : 'API Key'}>
+        <input type="password" value={apiKey} onChange={(e) => setApiKey(e.target.value)} placeholder={provider?.credentialConfigured ? t("已配置") : 'sk-…'} />
       </Field>
-      <Field label="超时（毫秒）">
+      <Field label={t("超时（毫秒）")}>
         <input value={timeoutMs} onChange={(e) => setTimeoutMs(e.target.value)} />
       </Field>
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
-        <Button onClick={onClose}>取消</Button>
+        <Button onClick={onClose}>{t("取消")}</Button>
         <Button variant="primary" onClick={save} disabled={saving || !name || !baseUrl}>
-          {saving ? '保存中…' : '保存'}
+          {saving ? t("保存中…") : t("保存")}
         </Button>
       </div>
     </Modal>

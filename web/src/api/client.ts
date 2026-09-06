@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 const TOKEN_KEY = 'aihub_admin_token'
 // Connected Desktop（§25）：workspace 支持本地与多个 Server；serverUrl 持久化
 const SERVER_URL_KEY = 'aihub_server_url'
@@ -50,12 +51,12 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
   if (res.status === 401) {
     clearToken()
     window.dispatchEvent(new Event('aihub:unauthorized'))
-    throw new ApiError(401, 'AIH_UNAUTHORIZED', '未登录或 Admin Token 无效')
+    throw new ApiError(401, 'AIH_UNAUTHORIZED', t("未登录或 Admin Token 无效"))
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     const err = body?.error ?? {}
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? `请求失败 (${res.status})`)
+    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? t("请求失败 ({0})", [res.status]))
   }
   return body?.data ?? body
 }
@@ -73,12 +74,12 @@ async function requestEnvelope<T = any>(path: string, init?: RequestInit): Promi
   if (res.status === 401) {
     clearToken()
     window.dispatchEvent(new Event('aihub:unauthorized'))
-    throw new ApiError(401, 'AIH_UNAUTHORIZED', '未登录或 Admin Token 无效')
+    throw new ApiError(401, 'AIH_UNAUTHORIZED', t("未登录或 Admin Token 无效"))
   }
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     const err = body?.error ?? {}
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? `请求失败 (${res.status})`)
+    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? t("请求失败 ({0})", [res.status]))
   }
   return body
 }

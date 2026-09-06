@@ -1,4 +1,5 @@
-import React from 'react'
+import { t } from '../i18n'
+import React, { useEffect, useRef, useId, useState } from 'react'
 
 export function Spinner({ label }: { label?: string }) {
   return (
@@ -41,7 +42,7 @@ export function Badge({ tone = 'muted', children }: { tone?: BadgeTone; children
 
 export function HealthBadge({ health }: { health: string }) {
   const tone = health === 'healthy' ? 'ok' : health === 'degraded' ? 'warn' : health === 'unavailable' ? 'err' : 'muted'
-  const label = { healthy: '健康', degraded: '降级', unavailable: '不可用', unknown: '未知' }[health] ?? health
+  const label = { healthy: t("健康"), degraded: t("降级"), unavailable: t("不可用"), unknown: t("未知") }[health] ?? health
   return <Badge tone={tone as BadgeTone}>{label}</Badge>
 }
 
@@ -91,12 +92,34 @@ export function Modal({
   children: React.ReactNode
   wide?: boolean
 }) {
+  const ref = useRef<HTMLDivElement>(null)
+  const titleId = useId()
+  const closeRef = useRef(onClose)
+  closeRef.current = onClose
+  useEffect(() => {
+    const previous = document.activeElement as HTMLElement | null
+    const overflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    const focusable = () => Array.from(ref.current?.querySelectorAll<HTMLElement>('button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]') ?? [])
+    ;(focusable()[0] ?? ref.current)?.focus()
+    const handler = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') { event.stopPropagation(); closeRef.current() }
+      if (event.key === 'Tab') {
+        const items = focusable(), first = items[0], last = items[items.length - 1]
+        if (!first) { event.preventDefault(); return }
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus() }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus() }
+      }
+    }
+    document.addEventListener('keydown', handler)
+    return () => { document.body.style.overflow = overflow; document.removeEventListener('keydown', handler); previous?.focus() }
+  }, [])
   return (
     <div className="modal-mask" onClick={onClose}>
-      <div className={`modal ${wide ? 'modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
+      <div ref={ref} role="dialog" aria-modal="true" aria-labelledby={titleId} tabIndex={-1} className={`modal ${wide ? 'modal-wide' : ''}`} onClick={(e) => e.stopPropagation()}>
         <div className="modal-head">
-          <h3>{title}</h3>
-          <button className="modal-close" onClick={onClose}>
+          <h3 id={titleId}>{title}</h3>
+          <button className="modal-close" aria-label={t('关闭')} onClick={onClose}>
             ×
           </button>
         </div>
@@ -127,7 +150,7 @@ export function EmptyState({ title, hint }: { title: string; hint?: string }) {
 
 export function Table({ head, children }: { head: React.ReactNode[]; children: React.ReactNode }) {
   return (
-    <table className="table">
+    <div className="table-scroll" tabIndex={0}><table className="table">
       <thead>
         <tr>
           {head.map((h, i) => (
@@ -136,11 +159,13 @@ export function Table({ head, children }: { head: React.ReactNode[]; children: R
         </tr>
       </thead>
       <tbody>{children}</tbody>
-    </table>
+    </table></div>
   )
 }
 
 export function Toast({ message, tone }: { message: string; tone: 'ok' | 'err' }) {
-  if (!message) return null
-  return <div className={`toast toast-${tone}`}>{message}</div>
+  const [dismissed, setDismissed] = useState(false)
+  useEffect(() => setDismissed(false), [message])
+  if (!message || dismissed) return null
+  return <div role={tone === 'err' ? 'alert' : 'status'} className={`toast toast-${tone}`}><span>{message}</span>{tone === 'err' && <button className="modal-close" aria-label={t('关闭')} onClick={() => setDismissed(true)}>×</button>}</div>
 }

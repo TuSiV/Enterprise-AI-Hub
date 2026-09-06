@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Badge, Button, Card, EmptyState, Field, Modal, Table, Toast } from '../components/ui'
@@ -34,7 +35,7 @@ export default function Knowledge() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 3000)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 3000)
   }
 
   const load = () =>
@@ -65,7 +66,7 @@ export default function Knowledge() {
         content: uploadContent,
       })
       setUploadContent('')
-      notify('文档已索引（ready）')
+      notify(t("文档已索引（ready）"))
       await openKb(selected)
       load()
     } catch (e: any) {
@@ -87,7 +88,7 @@ export default function Knowledge() {
   }
 
   const removeKb = async (kb: Kb) => {
-    if (!confirm(`删除知识库「${kb.key}」及全部文档？`)) return
+    if (!confirm(t("删除知识库「{0}」及全部文档？", [kb.key]))) return
     try {
       await api.del(`/api/v1/admin/knowledge-bases/${kb.id}`)
       setSelected(null)
@@ -100,7 +101,7 @@ export default function Knowledge() {
   const bindModel = async (kb: Kb, modelId: string) => {
     try {
       await api.post(`/api/v1/admin/knowledge-bases/${kb.id}/bind-embedding-model`, { modelId })
-      notify('Embedding 模型已绑定')
+      notify(t("Embedding 模型已绑定"))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -111,17 +112,16 @@ export default function Knowledge() {
     <>
       <div className="page-head">
         <div>
-          <h2>知识库</h2>
-          <div className="page-sub">上传 → 解析 → Chunk → Embedding → 检索（引用保留 filename/page，§19.5）</div>
+          <h2>{t("知识库")}</h2>
+          <div className="page-sub">{t("上传 → 解析 → Chunk → Embedding → 检索（引用保留 filename/page，§19.5）")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 新建知识库
-        </Button>
+          {t("+ 新建知识库")}</Button>
       </div>
 
       <Card>
         {kbs.length ? (
-          <Table head={['Key', '名称', '可见性', '文档', 'Chunks', 'Embedding', '操作']}>
+          <Table head={['Key', t("名称"), t("可见性"), t("文档"), 'Chunks', 'Embedding', t("操作")]}>
             {kbs.map((kb) => (
               <tr key={kb.id}>
                 <td className="mono">{kb.key}</td>
@@ -131,18 +131,17 @@ export default function Knowledge() {
                 </td>
                 <td>{kb.documentCount}</td>
                 <td>{kb.chunkCount}</td>
-                <td>{kb.embeddingModelId ? <Badge tone="info">已绑定</Badge> : <Badge tone="warn">未绑定</Badge>}</td>
+                <td>{kb.embeddingModelId ? <Badge tone="info">{t("已绑定")}</Badge> : <Badge tone="warn">{t("未绑定")}</Badge>}</td>
                 <td>
                   <Button variant="ghost" onClick={() => openKb(kb)}>
-                    打开
-                  </Button>
+                    {t("打开")}</Button>
                   {!kb.embeddingModelId && (
                     <select
                       defaultValue=""
                       onChange={(e) => e.target.value && bindModel(kb, e.target.value)}
                       style={{ border: '1px solid var(--border)', borderRadius: 8, padding: '4px 6px', fontSize: 12 }}
                     >
-                      <option value="">绑定 Embedding…</option>
+                      <option value="">{t("绑定 Embedding…")}</option>
                       {models.map((m) => (
                         <option key={m.id} value={m.id}>
                           {m.label}
@@ -151,22 +150,21 @@ export default function Knowledge() {
                     </select>
                   )}
                   <Button variant="ghost" onClick={() => removeKb(kb)}>
-                    删除
-                  </Button>
+                    {t("删除")}</Button>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="暂无知识库" hint="先在 Provider 页发现一个 embedding 模型，再建库绑定" />
+          <EmptyState title={t("暂无知识库")} hint={t("先在 Provider 页发现一个 embedding 模型，再建库绑定")} />
         )}
       </Card>
 
       {selected && (
         <>
-          <Card title={`文档 · ${selected.key}`}>
+          <Card title={t("文档 · {0}", [selected.key])}>
             {docs.length ? (
-              <Table head={['文件名', '类型', '大小', '解析', '索引']}>
+              <Table head={[t("文件名"), t("类型"), t("大小"), t("解析"), t("索引")]}>
                 {docs.map((d) => (
                   <tr key={d.id}>
                     <td className="mono">{d.filename}</td>
@@ -186,26 +184,24 @@ export default function Knowledge() {
                 ))}
               </Table>
             ) : (
-              <EmptyState title="暂无文档" />
+              <EmptyState title={t("暂无文档")} />
             )}
-            <Field label="粘贴文本内容并索引（txt）" hint="PDF/DOCX 上传需启用 Python Runtime（M11）">
+            <Field label={t("粘贴文本内容并索引（txt）")} hint={t("PDF/DOCX 上传需启用 Python Runtime（M11）")}>
               <textarea rows={4} value={uploadContent} onChange={(e) => setUploadContent(e.target.value)} />
             </Field>
             <Button variant="primary" onClick={upload} disabled={!uploadContent.trim()}>
-              上传并索引
-            </Button>
+              {t("上传并索引")}</Button>
           </Card>
 
-          <Card title="检索测试">
-            <Field label="查询">
-              <input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder="例如：北京办公室" />
+          <Card title={t("检索测试")}>
+            <Field label={t("查询")}>
+              <input value={queryText} onChange={(e) => setQueryText(e.target.value)} placeholder={t("例如：北京办公室")} />
             </Field>
             <Button onClick={query} disabled={!queryText.trim()}>
-              检索
-            </Button>
+              {t("检索")}</Button>
             {queryResult && (
               <div style={{ marginTop: 12 }}>
-                <Table head={['#', '分数', '文件', '内容预览']}>
+                <Table head={['#', t("分数"), t("文件"), t("内容预览")]}>
                   {queryResult.hits.map((h, i) => (
                     <tr key={h.chunkId}>
                       <td>[{i + 1}]</td>
@@ -228,7 +224,7 @@ export default function Knowledge() {
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false)
-            notify('已创建，请绑定 Embedding 模型')
+            notify(t("已创建，请绑定 Embedding 模型"))
             load()
           }}
         />
@@ -252,14 +248,14 @@ function KbForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void
     }
   }
   return (
-    <Modal title="新建知识库" onClose={onClose}>
+    <Modal title={t("新建知识库")} onClose={onClose}>
       <Field label="Key">
         <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="legal-kb" />
       </Field>
-      <Field label="名称">
+      <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <Field label="可见性">
+      <Field label={t("可见性")}>
         <select value={visibility} onChange={(e) => setVisibility(e.target.value)}>
           <option value="private">private</option>
           <option value="department">department</option>
@@ -269,8 +265,7 @@ function KbForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => void
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="primary" onClick={save} disabled={!key || !name}>
-          创建
-        </Button>
+          {t("创建")}</Button>
       </div>
     </Modal>
   )

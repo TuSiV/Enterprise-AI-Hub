@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Badge, Button, Card, EmptyState, Field, Modal, Table, Toast } from '../components/ui'
@@ -28,7 +29,7 @@ export default function Prompts() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 2600)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 2600)
   }
 
   const load = () => api.get<PromptDetail[]>('/api/v1/admin/prompts').then(setPrompts)
@@ -42,7 +43,7 @@ export default function Prompts() {
         systemTemplate: system || undefined,
         userTemplate: user || undefined,
       })
-      notify('新版本已创建（draft）')
+      notify(t("新版本已创建（draft）"))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -52,7 +53,7 @@ export default function Prompts() {
   const publish = async (v: PromptVersion) => {
     try {
       await api.post(`/api/v1/admin/prompt-versions/${v.id}/publish`)
-      notify(`v${v.version} 已发布（旧版本自动废弃）`)
+      notify(t("v{0} 已发布（旧版本自动废弃）", [v.version]))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -62,7 +63,7 @@ export default function Prompts() {
   const deprecate = async (v: PromptVersion) => {
     try {
       await api.post(`/api/v1/admin/prompt-versions/${v.id}/deprecate`)
-      notify(`v${v.version} 已废弃`)
+      notify(t("v{0} 已废弃", [v.version]))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -70,7 +71,7 @@ export default function Prompts() {
   }
 
   const remove = async (p: PromptDetail) => {
-    if (!confirm(`删除 Prompt「${p.key}」及全部版本？`)) return
+    if (!confirm(t("删除 Prompt「{0}」及全部版本？", [p.key]))) return
     try {
       await api.del(`/api/v1/admin/prompts/${p.id}`)
       load()
@@ -83,17 +84,16 @@ export default function Prompts() {
     <>
       <div className="page-head">
         <div>
-          <h2>Prompts</h2>
-          <div className="page-sub">版本化管理：draft → published → deprecated；Published 不可原地修改（§18.1）</div>
+          <h2>{t('提示词')}</h2>
+          <div className="page-sub">{t("版本化管理：draft → published → deprecated；Published 不可原地修改")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 新建 Prompt
-        </Button>
+          {t("+ 新建 Prompt")}</Button>
       </div>
 
       <Card>
         {prompts.length ? (
-          <Table head={['Key', '名称', '版本数', 'Published', '操作']}>
+          <Table head={['Key', t("名称"), t("版本数"), 'Published', t("操作")]}>
             {prompts.map((p) => (
               <tr key={p.id}>
                 <td className="mono">{p.key}</td>
@@ -102,20 +102,18 @@ export default function Prompts() {
                   {p.description && <div className="dim">{p.description}</div>}
                 </td>
                 <td>{p.versions.length}</td>
-                <td>{p.publishedVersion ? <Badge tone="ok">v{p.publishedVersion}</Badge> : <Badge tone="muted">未发布</Badge>}</td>
+                <td>{p.publishedVersion ? <Badge tone="ok">v{p.publishedVersion}</Badge> : <Badge tone="muted">{t("未发布")}</Badge>}</td>
                 <td>
                   <Button variant="ghost" onClick={() => setEditing(p)}>
-                    版本管理
-                  </Button>
+                    {t("版本管理")}</Button>
                   <Button variant="ghost" onClick={() => remove(p)}>
-                    删除
-                  </Button>
+                    {t("删除")}</Button>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="暂无 Prompt" />
+          <EmptyState title={t("暂无 Prompt")} />
         )}
       </Card>
 
@@ -124,13 +122,13 @@ export default function Prompts() {
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false)
-            notify('已创建')
+            notify(t("已创建"))
             load()
           }}
         />
       )}
       {editing && (
-        <Modal title={`版本管理 · ${editing.key}`} onClose={() => setEditing(null)} wide>
+        <Modal title={t("版本管理 · {0}", [editing.key])} onClose={() => setEditing(null)} wide>
           <VersionEditor prompt={editing} onCreate={createVersion} onPublish={publish} onDeprecate={deprecate} />
         </Modal>
       )}
@@ -154,18 +152,17 @@ function VersionEditor({
   const [user, setUser] = useState('')
   return (
     <>
-      <Card title="新版本草稿">
-        <Field label="System 模板（支持 {{变量}}）">
+      <Card title={t("新版本草稿")}>
+        <Field label={t("System 模板（支持 {{变量}}）")}>
           <textarea rows={3} value={system} onChange={(e) => setSystem(e.target.value)} />
         </Field>
-        <Field label="User 模板（支持 {{变量}}）">
+        <Field label={t("User 模板（支持 {{变量}}）")}>
           <textarea rows={3} value={user} onChange={(e) => setUser(e.target.value)} />
         </Field>
         <Button variant="primary" onClick={() => onCreate(prompt, system, user)} disabled={!system && !user}>
-          创建新版本
-        </Button>
+          {t("创建新版本")}</Button>
       </Card>
-      <Table head={['版本', '状态', 'System 预览', '操作']}>
+      <Table head={[t("版本"), t("状态"), t("System 预览"), t("操作")]}>
         {prompt.versions.map((v) => (
           <tr key={v.id}>
             <td>v{v.version}</td>
@@ -178,13 +175,11 @@ function VersionEditor({
             <td>
               {v.status !== 'published' && (
                 <Button variant="ghost" onClick={() => onPublish(v)}>
-                  发布
-                </Button>
+                  {t("发布")}</Button>
               )}
               {v.status === 'published' && (
                 <Button variant="ghost" onClick={() => onDeprecate(v)}>
-                  废弃
-                </Button>
+                  {t("废弃")}</Button>
               )}
             </td>
           </tr>
@@ -208,21 +203,20 @@ function PromptForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => 
     }
   }
   return (
-    <Modal title="新建 Prompt" onClose={onClose}>
+    <Modal title={t("新建 Prompt")} onClose={onClose}>
       <Field label="Key">
         <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="legal-summary" />
       </Field>
-      <Field label="名称">
+      <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <Field label="描述">
+      <Field label={t("描述")}>
         <input value={description} onChange={(e) => setDescription(e.target.value)} />
       </Field>
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="primary" onClick={save} disabled={!key || !name}>
-          创建
-        </Button>
+          {t("创建")}</Button>
       </div>
     </Modal>
   )

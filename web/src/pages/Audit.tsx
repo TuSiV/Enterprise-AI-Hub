@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api, qs } from '../api/client'
 import type { AuditEventDto } from '../api/types'
@@ -5,6 +6,7 @@ import { formatTime } from '../api/types'
 import { Badge, Button, Card, Table, Spinner, EmptyState } from '../components/ui'
 
 export default function Audit() {
+  const [error, setError] = useState('')
   const [items, setItems] = useState<AuditEventDto[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
@@ -19,6 +21,7 @@ export default function Audit() {
         setItems(resp.data ?? [])
         setTotal(resp.meta?.total ?? 0)
       })
+      .catch(e => setError(e.message))
       .finally(() => setLoading(false))
   }, [page, eventType])
 
@@ -26,16 +29,17 @@ export default function Audit() {
 
   return (
     <>
+      {error && <div className="error-banner" role="alert">{error}</div>}
       <div className="page-head">
         <div>
-          <h2>审计</h2>
-          <div className="page-sub">管理操作与请求级审计事件（默认 Metadata Only，内容按策略保存）</div>
+          <h2>{t("审计")}</h2>
+          <div className="page-sub">{t("管理操作与请求级审计事件（默认 Metadata Only，内容按策略保存）")}</div>
         </div>
       </div>
       <Card>
         <div className="filters">
           <select value={eventType} onChange={(e) => { setEventType(e.target.value); setPage(1) }}>
-            <option value="">全部事件</option>
+            <option value="">{t("全部事件")}</option>
             {['request.completed', 'request.failed', 'request.client_cancelled', 'provider.created', 'provider.updated', 'provider.deleted', 'provider.tested', 'provider.models_discovered', 'model.created', 'virtual_model.created', 'virtual_model.updated', 'application.created', 'application.updated', 'api_key.created', 'api_key.revoked'].map((t) => (
               <option key={t}>{t}</option>
             ))}
@@ -45,7 +49,7 @@ export default function Audit() {
           <Spinner />
         ) : items.length ? (
           <>
-            <Table head={['时间', '事件', '资源', '决策', 'Trace', '元数据']}>
+            <Table head={[t("时间"), t("事件"), t("资源"), t("决策"), 'Trace', t("元数据")]}>
               {items.map((e) => (
                 <tr key={e.id}>
                   <td className="dim">{formatTime(e.createdAt)}</td>
@@ -67,18 +71,15 @@ export default function Audit() {
             </Table>
             <div className="pagination">
               <span>
-                共 {total} 条 · 第 {page}/{pages} 页
-              </span>
+                {t('共 {0} 条 · 第 {1}/{2} 页', [total, page, pages])}</span>
               <Button variant="ghost" disabled={page <= 1} onClick={() => setPage(page - 1)}>
-                上一页
-              </Button>
+                {t("上一页")}</Button>
               <Button variant="ghost" disabled={page >= pages} onClick={() => setPage(page + 1)}>
-                下一页
-              </Button>
+                {t("下一页")}</Button>
             </div>
           </>
         ) : (
-          <EmptyState title="暂无审计事件" />
+          <EmptyState title={t("暂无审计事件")} />
         )}
       </Card>
     </>

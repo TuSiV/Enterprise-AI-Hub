@@ -1,0 +1,20 @@
+const paths: Record<string, string> = {
+  overview: 'M3 3h7v7H3z M14 3h7v7h-7z M3 14h7v7H3z M14 14h7v7h-7z',
+  models: 'm12 3 9 5-9 5-9-5 9-5z M3 12l9 5 9-5 M3 16l9 5 9-5',
+  providers: 'M7 3v5 M17 3v5 M5 8h14v3a7 7 0 0 1-14 0V8z M12 18v4',
+  route: 'M5 4v10a5 5 0 0 0 5 5h9 M15 15l4 4-4 4 M5 4h10a4 4 0 0 1 0 8H5',
+  apps: 'M3 5h18v15H3z M3 10h18 M7 7h.01 M10 7h.01',
+  chat: 'M21 11a8 8 0 0 1-8 8H7l-5 3 2-6a8 8 0 1 1 17-5z',
+  prompt: 'm6 7 5 5-5 5 M13 17h6',
+  book: 'M12 5v16 M12 5C8 2 4 3 2 4v15c4-2 7-1 10 2 3-3 6-4 10-2V4c-2-1-6-2-10 1z',
+  agent: 'M5 7h14v13H5z M12 3v4 M9 12h.01 M15 12h.01 M9 16h6 M2 11v5 M22 11v5',
+  chart: 'M4 3v18h17 M8 16v-4 M13 16V8 M18 16V5',
+  activity: 'M2 12h5l3-8 4 16 3-8h5',
+  audit: 'M5 3h10l4 4v14H5z M14 3v5h5 M8 12h8 M8 16h6',
+  shield: 'm12 2 9 4v6c0 5-9 10-9 10S3 17 3 12V6l9-4z m-4 10 3 3 5-6',
+  settings: 'M4 7h16 M4 17h16 M8 4v6 M16 14v6',
+  logout: 'M9 3H3v18h6 M9 12h12 m-4-4 4 4-4 4',
+  menu: 'M3 6h18 M3 12h18 M3 18h18',
+  search: 'M21 21l-6-6 M17 10a7 7 0 1 1-14 0 7 7 0 0 1 14 0',
+}
+export function Icon({ name }: { name: string }) { return <svg className="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name] ?? paths.models} /></svg> }

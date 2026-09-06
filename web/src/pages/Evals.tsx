@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { formatCost } from '../api/types'
@@ -43,7 +44,7 @@ export default function Evals() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 3000)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 3000)
   }
 
   const load = () => api.get<Dataset[]>('/api/v1/admin/evals/datasets').then(setDatasets)
@@ -92,39 +93,37 @@ export default function Evals() {
     <>
       <div className="page-head">
         <div>
-          <h2>评测</h2>
-          <div className="page-sub">Dataset/Cases → 多候选运行 → rule 分 + 可选 LLM Judge + 成本/延迟对比（§20.6）</div>
+          <h2>{t("评测")}</h2>
+          <div className="page-sub">{t("Dataset/Cases → 多候选运行 → rule 分 + 可选 LLM Judge + 成本/延迟对比")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 新建数据集
-        </Button>
+          {t("+ 新建数据集")}</Button>
       </div>
 
       <Card>
         {datasets.length ? (
-          <Table head={['Key', '名称', '操作']}>
+          <Table head={['Key', t("名称"), t("操作")]}>
             {datasets.map((d) => (
               <tr key={d.id}>
                 <td className="mono">{d.key}</td>
                 <td>{d.name}</td>
                 <td>
                   <Button variant="ghost" onClick={() => open(d)}>
-                    打开
-                  </Button>
+                    {t("打开")}</Button>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="暂无数据集" />
+          <EmptyState title={t("暂无数据集")} />
         )}
       </Card>
 
       {selected && (
         <>
-          <Card title={`用例 · ${selected.key}（${cases.length}）`}>
+          <Card title={t("用例 · {0}（{1}）", [selected.key, cases.length])}>
             {cases.length > 0 && (
-              <Table head={['名称', '问题', '期望输出']}>
+              <Table head={[t("名称"), t("问题"), t("期望输出")]}>
                 {cases.map((c) => (
                   <tr key={c.id}>
                     <td>{c.name}</td>
@@ -137,16 +136,15 @@ export default function Evals() {
             <CaseEditor onAdd={addCase} />
           </Card>
 
-          <Card title="运行评测">
-            <Field label="候选模型">
+          <Card title={t("运行评测")}>
+            <Field label={t("候选模型")}>
               <input value={model} onChange={(e) => setModel(e.target.value)} />
             </Field>
             <Button variant="primary" onClick={run} disabled={!cases.length}>
-              运行（对全部用例）
-            </Button>
+              {t("运行（对全部用例）")}</Button>
             {runs.length > 0 && (
               <div style={{ marginTop: 12 }}>
-                <Table head={['Run', '状态', '平均分', '平均延迟', '总成本']}>
+                <Table head={['Run', t("状态"), t("平均分"), t("平均延迟"), t("总成本")]}>
                   {runs.map((r) => (
                     <tr key={r.id}>
                       <td className="mono">{r.label}</td>
@@ -164,8 +162,8 @@ export default function Evals() {
           </Card>
 
           {outcome && (
-            <Card title="最近一次运行结果">
-              <Table head={['回答', '得分', '延迟', '成本']}>
+            <Card title={t("最近一次运行结果")}>
+              <Table head={[t("回答"), t("得分"), t("延迟"), t("成本")]}>
                 {outcome.results.map((r, i) => (
                   <tr key={i}>
                     <td className="dim" style={{ maxWidth: 380 }}>
@@ -187,11 +185,11 @@ export default function Evals() {
       )}
 
       {creating && (
-        <Modal title="新建数据集" onClose={() => setCreating(false)}>
+        <Modal title={t("新建数据集")} onClose={() => setCreating(false)}>
           <DatasetForm
             onSaved={() => {
               setCreating(false)
-              notify('已创建')
+              notify(t("已创建"))
               load()
             }}
           />
@@ -208,16 +206,15 @@ function CaseEditor({ onAdd }: { onAdd: (q: string, e: string) => void }) {
   return (
     <div style={{ marginTop: 12 }}>
       <div className="field-row">
-        <Field label="问题">
+        <Field label={t("问题")}>
           <input value={q} onChange={(ev) => setQ(ev.target.value)} />
         </Field>
-        <Field label="期望输出（可选）">
+        <Field label={t("期望输出（可选）")}>
           <input value={e} onChange={(ev) => setE(ev.target.value)} />
         </Field>
       </div>
       <Button onClick={() => { onAdd(q, e); setQ(''); setE('') }} disabled={!q}>
-        添加用例
-      </Button>
+        {t("添加用例")}</Button>
     </div>
   )
 }
@@ -239,14 +236,13 @@ function DatasetForm({ onSaved }: { onSaved: () => void }) {
       <Field label="Key">
         <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="smoke-eval" />
       </Field>
-      <Field label="名称">
+      <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="primary" onClick={save} disabled={!key || !name}>
-          创建
-        </Button>
+          {t("创建")}</Button>
       </div>
     </>
   )

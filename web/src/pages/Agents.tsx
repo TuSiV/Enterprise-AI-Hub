@@ -1,3 +1,4 @@
+import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api } from '../api/client'
 import { Badge, Button, Card, EmptyState, Field, Modal, Table, Toast } from '../components/ui'
@@ -40,7 +41,7 @@ export default function Agents() {
 
   const notify = (message: string, tone: 'ok' | 'err' = 'ok') => {
     setToast({ message, tone })
-    setTimeout(() => setToast({ message: '', tone }), 3000)
+    if (tone !== 'err') setTimeout(() => setToast({ message: '', tone }), 3000)
   }
 
   const load = async () => {
@@ -63,7 +64,7 @@ export default function Agents() {
   const publish = async (v: AgentVersion) => {
     try {
       await api.post(`/api/v1/admin/agent-versions/${v.id}/publish`)
-      notify(`v${v.version} 已发布`)
+      notify(t("v{0} 已发布", [v.version]))
       load()
     } catch (e: any) {
       notify(e.message, 'err')
@@ -84,15 +85,14 @@ export default function Agents() {
     <>
       <div className="page-head">
         <div>
-          <h2>Agents</h2>
-          <div className="page-sub">LLM + Tool 循环执行；maxSteps/工具白名单/全量 ToolCall 审计（§20）</div>
+          <h2>{t('智能体')}</h2>
+          <div className="page-sub">{t("LLM + Tool 循环执行；maxSteps/工具白名单/全量 ToolCall 审计")}</div>
         </div>
         <Button variant="primary" onClick={() => setCreating(true)}>
-          + 创建 Agent
-        </Button>
+          {t("+ 创建 Agent")}</Button>
       </div>
 
-      <Card title="内置与已注册工具">
+      <Card title={t("内置与已注册工具")}>
         {tools.length ? (
           <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
             {tools.map((t) => (
@@ -102,13 +102,13 @@ export default function Agents() {
             ))}
           </div>
         ) : (
-          <EmptyState title="暂无工具" />
+          <EmptyState title={t("暂无工具")} />
         )}
       </Card>
 
       <Card>
         {agents.length ? (
-          <Table head={['Key', '名称', '版本', '操作']}>
+          <Table head={['Key', t("名称"), t("版本"), t("操作")]}>
             {agents.map((a) => (
               <tr key={a.id}>
                 <td className="mono">{a.key}</td>
@@ -121,27 +121,25 @@ export default function Agents() {
                       </Badge>
                       {v.status !== 'published' && (
                         <button className="btn btn-ghost btn-sm" onClick={() => publish(v)}>
-                          发布
-                        </button>
+                          {t("发布")}</button>
                       )}
                     </span>
                   ))}
                 </td>
                 <td>
                   <Button variant="ghost" onClick={() => { setRunTarget(a); setRunResult(null) }}>
-                    运行测试
-                  </Button>
+                    {t("运行测试")}</Button>
                 </td>
               </tr>
             ))}
           </Table>
         ) : (
-          <EmptyState title="暂无 Agent" hint="创建后需发布版本才能运行" />
+          <EmptyState title={t("暂无 Agent")} hint={t("创建后需发布版本才能运行")} />
         )}
       </Card>
 
       {runTarget && (
-        <Modal title={`运行 · ${runTarget.key}`} onClose={() => setRunTarget(null)} wide>
+        <Modal title={t("运行 · {0}", [runTarget.key])} onClose={() => setRunTarget(null)} wide>
           <RunPanel agent={runTarget} onRun={run} result={runResult} />
         </Modal>
       )}
@@ -150,7 +148,7 @@ export default function Agents() {
           onClose={() => setCreating(false)}
           onSaved={() => {
             setCreating(false)
-            notify('已创建（draft），请发布后运行')
+            notify(t("已创建（draft），请发布后运行"))
             load()
           }}
         />
@@ -169,25 +167,24 @@ function RunPanel({
   onRun: (a: Agent, task: string) => void
   result: RunResult | null
 }) {
-  const [task, setTask] = useState('请做一个自我介绍')
+  const [task, setTask] = useState(t("请做一个自我介绍"))
   return (
     <>
-      <Field label="任务输入">
+      <Field label={t("任务输入")}>
         <textarea rows={3} value={task} onChange={(e) => setTask(e.target.value)} />
       </Field>
       <Button variant="primary" onClick={() => onRun(agent, task)}>
-        运行（Published 版本）
-      </Button>
+        {t("运行（Published 版本）")}</Button>
       {result && (
         <div style={{ marginTop: 14 }}>
           <p>
-            状态：<Badge tone={result.status === 'completed' ? 'ok' : 'err'}>{result.status}</Badge> · 步数 {result.steps} ·{' '}
-            成本 {result.costMicrounits} microunits
+            {t("状态：")}<Badge tone={result.status === 'completed' ? 'ok' : 'err'}>{result.status}</Badge> {t("· 步数")}{result.steps} ·{' '}
+            {t("成本")}{result.costMicrounits} microunits
           </p>
           {result.output && <pre className="json">{result.output}</pre>}
           {result.error && <p style={{ color: 'var(--err)' }}>{result.error}</p>}
           {result.toolCalls.length > 0 && (
-            <Table head={['工具', '状态', '延迟']}>
+            <Table head={[t("工具"), t("状态"), t("延迟")]}>
               {result.toolCalls.map((c, i) => (
                 <tr key={i}>
                   <td className="mono">{c.toolKey}</td>
@@ -209,7 +206,7 @@ function AgentForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
   const [key, setKey] = useState('')
   const [name, setName] = useState('')
   const [modelRef, setModelRef] = useState('general-smart')
-  const [systemPrompt, setSystemPrompt] = useState('你是一个企业助手，需要时调用工具。')
+  const [systemPrompt, setSystemPrompt] = useState(t("你是一个企业助手，需要时调用工具。"))
   const [allowedTools, setAllowedTools] = useState<string[]>([])
   const [allTools, setAllTools] = useState<any[]>([])
   const [error, setError] = useState('')
@@ -233,20 +230,20 @@ function AgentForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
     }
   }
   return (
-    <Modal title="创建 Agent（draft v1）" onClose={onClose} wide>
+    <Modal title={t("创建 Agent（draft v1）")} onClose={onClose} wide>
       <Field label="Key">
         <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="assistant" />
       </Field>
-      <Field label="名称">
+      <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} />
       </Field>
-      <Field label="模型（Virtual/Physical key）">
+      <Field label={t("模型（Virtual/Physical key）")}>
         <input value={modelRef} onChange={(e) => setModelRef(e.target.value)} />
       </Field>
       <Field label="System Prompt">
         <textarea rows={3} value={systemPrompt} onChange={(e) => setSystemPrompt(e.target.value)} />
       </Field>
-      <Field label="允许的工具（不选 = 仅模型对话）">
+      <Field label={t("允许的工具（不选 = 仅模型对话）")}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
           {allTools.map((t) => (
             <label key={t.id} style={{ fontSize: 13 }}>
@@ -269,8 +266,7 @@ function AgentForm({ onClose, onSaved }: { onClose: () => void; onSaved: () => v
       {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
       <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <Button variant="primary" onClick={save} disabled={!key || !name}>
-          创建
-        </Button>
+          {t("创建")}</Button>
       </div>
     </Modal>
   )

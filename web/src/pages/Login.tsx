@@ -1,3 +1,4 @@
+import { t, LanguageSwitch } from '../i18n'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api, setToken, setServerUrl, ApiError } from '../api/client'
@@ -31,7 +32,7 @@ export default function Login() {
       navigate('/')
     } catch (e) {
       setToken('')
-      setError(e instanceof ApiError ? e.message : '连接失败，请确认服务已启动')
+      setError(e instanceof ApiError ? e.message : t("连接失败，请确认服务已启动"))
     } finally {
       setLoading(false)
     }
@@ -49,10 +50,11 @@ export default function Login() {
   return (
     <div className="login-wrap">
       <div className="login-card">
+        <div className="login-language"><LanguageSwitch /></div><div className="login-emblem">AI</div>
         <h1>Enterprise AI Hub</h1>
-        <p>输入 Admin Token 进入控制台。本地模式下 token 存储于应用数据目录 admin_token 文件。</p>
+        <p>{t("输入 Admin Token 进入控制台。本地模式下 token 存储于应用数据目录 admin_token 文件。")}</p>
         <label className="field">
-          <span className="field-label">服务器地址（留空 = 本地 Connected/Local Workspace，§25.1）</span>
+          <span className="field-label">{t("服务器地址（留空使用本地工作空间）")}</span>
           <input
             value={serverUrl}
             onChange={(e) => setServerUrlValue(e.target.value)}
@@ -72,7 +74,7 @@ export default function Login() {
         </label>
         {error && <p style={{ color: 'var(--err)', fontSize: 12.5 }}>{error}</p>}
         <button className="btn btn-primary" style={{ width: '100%' }} onClick={() => submit()} disabled={loading || !token.trim()}>
-          {loading ? '验证中…' : '进入控制台'}
+          {loading ? t("验证中…") : t("进入控制台")}
         </button>
       </div>
     </div>
