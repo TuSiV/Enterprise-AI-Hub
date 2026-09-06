@@ -32,7 +32,8 @@
 
 | Runtime Jobs（M11） | ✅ | runtime_jobs 持久化队列（重试/退避/requeue）+ 后台 worker + 管理 API |
 | 对象存储（M10/M12） | ✅ | ObjectStorage Port：Local（默认）/ S3-compatible（SigV4 最小实现，兼容 MinIO） |
-| Identity Provider（M10） | ✅ | local / trusted_header（§11.3 显式开启）/ oidc subject 映射 |
+| Identity Provider（M10） | ✅ | local / trusted_header（§11.3 显式开启）/ **OIDC RS256 id_token JWKS 验签**（iss/aud 校验 + 篡改拒绝，e2e 覆盖） |
+| 交付附件（§36.4） | ✅ | Dockerfile（多阶段：Rust+Web+Runtime）+ docker-compose（PostgreSQL+Server）；tauri updater 配置 + 发布签名流程文档（UPDATER.md）；Playwright web E2E spec（web/e2e） |
 | Connected Desktop（§25） | ✅ | 登录页支持 Server Workspace 地址切换，本地/远程统一 client |
 
 未实现（明确标注）：Anthropic/Gemini 专属 Adapter、OIDC token 校验（JWKS，需部署 IdP）、分布式限流（Stage F 按需）、Desktop 自动更新签名（需发布证书）。
@@ -129,7 +130,7 @@ OpenAI 兼容客户端 ───────────────────
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test                                              # 61 tests：domain 单元 / SQLite 契约 / Provider Adapter 契约矩阵(§31.3) / Gateway+Platform e2e / RBAC / 并发与取消风暴(§31.8)
+cargo test                                              # 65 tests（含 OIDC 验签 / Desktop 语义）：domain 单元 / SQLite 契约 / Provider Adapter 契约矩阵(§31.3) / Gateway+Platform e2e / RBAC / 并发与取消风暴(§31.8)
 TEST_DATABASE_URL=... cargo test -p aihub-persistence --test pg_contract -- --ignored   # PostgreSQL 契约（本机 PG 18 验证）
 cd web && npm run build                                 # tsc --noEmit + vite build
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
