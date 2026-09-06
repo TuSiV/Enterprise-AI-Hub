@@ -347,9 +347,12 @@ impl ToolExecutor {
         if !server.enabled {
             return Err(format!("mcp server '{server_key}' is disabled"));
         }
+        if server.transport == "stdio" {
+            return self.execute_mcp_stdio(&server, tool, arguments).await;
+        }
         if server.transport != "streamable-http" {
             return Err(format!(
-                "mcp transport '{}' not supported in V1 (use streamable-http)",
+                "mcp transport '{}' not supported (stdio / streamable-http)",
                 server.transport
             ));
         }

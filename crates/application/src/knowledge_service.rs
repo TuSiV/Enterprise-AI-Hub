@@ -655,6 +655,29 @@ pub fn cosine_similarity(a: &[f32], b: &[f32]) -> f64 {
 #[allow(dead_code)]
 fn unused(_: UsageSource) {}
 
+/// 关键词分词：按非字母数字切分（V1 简化 BM25 的覆盖率代理）。
+pub fn tokenize(query: &str) -> Vec<String> {
+    let normalized: String = query
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    normalized
+        .split_whitespace()
+        .map(|s| s.to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// 关键词覆盖率：命中 term 比例。
+pub fn keyword_coverage(terms: &[String], content: &str) -> f64 {
+    if terms.is_empty() {
+        return 0.0;
+    }
+    let lower = content.to_lowercase();
+    let hit = terms.iter().filter(|t| lower.contains(t.as_str())).count();
+    hit as f64 / terms.len() as f64
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -691,27 +714,4 @@ mod tests {
         );
         assert_eq!(keyword_coverage(&[], "北京"), 0.0);
     }
-}
-
-/// 关键词分词：按非字母数字切分（V1 简化 BM25 的覆盖率代理）。
-pub fn tokenize(query: &str) -> Vec<String> {
-    let normalized: String = query
-        .chars()
-        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
-        .collect();
-    normalized
-        .split_whitespace()
-        .map(|s| s.to_lowercase())
-        .filter(|s| !s.is_empty())
-        .collect()
-}
-
-/// 关键词覆盖率：命中 term 比例。
-pub fn keyword_coverage(terms: &[String], content: &str) -> f64 {
-    if terms.is_empty() {
-        return 0.0;
-    }
-    let lower = content.to_lowercase();
-    let hit = terms.iter().filter(|t| lower.contains(t.as_str())).count();
-    hit as f64 / terms.len() as f64
 }
