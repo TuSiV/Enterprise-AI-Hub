@@ -81,6 +81,33 @@ def parse(body: dict, x_aih_session_token: Optional[str] = Header(default=None))
     return {"text": text, "pages": pages}
 
 
+@app.post("/internal/v1/embeddings")
+def embeddings_task(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    """Embedding 由 Core 侧 Provider Adapter 执行（§41.3：Runtime 不持有主库凭据）；
+    本地模型 Runtime 接入后在此返回 200 并更新 capabilities。"""
+    raise HTTPException(status_code=501, detail="embeddings are executed by the core provider adapters")
+
+
+@app.post("/internal/v1/rerank")
+def rerank_task(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    raise HTTPException(status_code=501, detail="rerank adapter endpoint not bound (KB.rerank_model_id reserved)")
+
+
+@app.post("/internal/v1/retrieval/query")
+def retrieval_task(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    raise HTTPException(status_code=501, detail="retrieval executes in core against the vector store")
+
+
+@app.post("/internal/v1/agents/run")
+def agents_run(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    raise HTTPException(status_code=501, detail="agent loop executes in core")
+
+
+@app.post("/internal/v1/evals/run")
+def evals_run(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    raise HTTPException(status_code=501, detail="eval executes in core")
+
+
 def main() -> None:
     global _session_token
     parser = argparse.ArgumentParser(prog="aihub-runtime")
