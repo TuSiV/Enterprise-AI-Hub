@@ -64,7 +64,7 @@ fn main() {
     }
 
     // Core 启动是同步语义（窗口需要 endpoint）；迁移失败时直接退出并记录日志（§23.1 Recovery 由日志与重试承载）。
-    let (handle, endpoint) = runtime.block_on(async {
+    let (handle, endpoint, admin_token) = runtime.block_on(async {
         let mut config = aihub_config::Config::load(None, Some(aihub_config::Mode::Desktop))
             .expect("load config");
         let (addr, port) = aihub_server::bind(&config).await.expect("bind gateway");
@@ -83,13 +83,20 @@ fn main() {
             });
             let _ = server.await;
         });
+        let admin_token_value = core.admin_token.clone();
         let handle = CoreHandle {
-            admin_token: core.admin_token.clone(),
+            admin_token: admin_token_value.clone(),
             endpoint: endpoint.clone(),
             shutdown: shutdown_tx,
         };
-        (handle, endpoint)
+        (handle, endpoint, admin_token_value)
     });
+
+    eprintln!();
+    eprintln!("  Enterprise AI Hub v{}", aihub_server::VERSION);
+    eprintln!("  ├─ 控制台/Gateway : {endpoint}");
+    eprintln!("  └─ Admin Token    : {admin_token}（也已写入数据目录 admin_token）");
+    eprintln!();
 
     tauri::Builder::default()
         .manage(handle)
