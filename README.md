@@ -9,7 +9,7 @@
 [![CI](https://github.com/TuSiV/ai-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/TuSiV/ai-hub/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.94-DEA584?logo=rust)](https://www.rust-lang.org)
-[![Tests](https://img.shields.io/badge/tests-65%20passing-16a34a)](#-测试与质量门禁)
+[![Tests](https://img.shields.io/badge/tests-62%20passing-16a34a)](#测试与质量门禁)
 [![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-336791?logo=postgresql)](https://www.postgresql.org)
 [![Desktop](https://img.shields.io/badge/Desktop-Tauri%202-FFC131)](https://tauri.app)
 
@@ -21,25 +21,25 @@
 
 ## 为什么
 
-企业面对的不是"再买一个聊天机器人"，而是：模型分散接入、成本无法归集、路由无法治理、行为无法审计。
+企业面对的不是"再买一个聊天机器人"，而是模型分散接入、成本无法归集、路由无法治理、行为无法审计。
 
-**Enterprise AI Hub 把 AI 当作统一基础设施来建设**——任何 OpenAI SDK 应用只改一行 `base_url`，即可获得：
+**Enterprise AI Hub 把 AI 当作统一基础设施来建设**——任何 OpenAI SDK 应用只需改一行 `base_url`，即可获得：
 
 | | |
 |---|---|
-| 🔌 **统一接入** | Provider（OpenAI 兼容/Ollama…）注册 + 连接测试 + 模型自动发现 |
+| 🔌 **统一接入** | Provider（OpenAI 兼容 / Ollama…）注册 + 连接测试 + 模型自动发现 |
 | 🧭 **智能路由** | Virtual Model 抽象（客户端零改动换后端）、优先级 Failover、熔断器、重试 |
-| 🔑 **统一调用** | Application / API Key 生命周期、模型白名单、RPM/日请求/月成本配额 |
-| 📊 **统一计量** | Token 与成本（microunits 整数 + 计费快照）、P95/TTFT、按模型/应用聚合 |
-| 🛡️ **统一治理** | 全量审计、RBAC 多用户、数据分级→路由矩阵、DLP 脱敏、SSRF 校验 |
-| 📚 **知识增强** | 知识库上传→解析(PDF/DOCX)→Chunk→Embedding→混合检索→带引用回答 |
-| 🤖 **Agent / MCP** | 版本化 Agent 循环执行、工具白名单与全量审计、MCP stdio/HTTP 双通道 |
-| 🧪 **评测** | 数据集→多候选运行→Rule 打分 + LLM Judge→成本/延迟回归对比 |
+| 🔑 **统一调用** | Application / API Key 生命周期、模型白名单、RPM / 日请求 / 月成本配额 |
+| 📊 **统一计量** | Token 与成本（microunits 整数 + 计费快照）、P95/TTFT、按模型 / 应用聚合 |
+| 🛡️ **统一治理** | 全量审计、RBAC 多用户、数据分级 → 路由矩阵、DLP 脱敏、SSRF 校验 |
+| 📚 **知识增强** | 知识库上传 → 解析（PDF/DOCX）→ Chunk → Embedding → 混合检索 → 带引用回答 |
+| 🤖 **Agent / MCP** | 版本化 Agent 循环执行、工具白名单与全量审计、MCP stdio / HTTP 双通道 |
+| 🧪 **评测** | 数据集 → 多候选运行 → Rule 打分 + LLM Judge → 成本 / 延迟回归对比 |
 
 <details>
 <summary><b>设计边界 —— 我们明确不做的事（反模式约束）</b></summary>
 
-- ❌ 聊天页面优先（Chat UI 是客户端不是平台核心）
+- ❌ 聊天页面优先（Chat UI 是客户端，不是平台核心）
 - ❌ Provider if/else 写进 Gateway（必须走 Adapter）
 - ❌ Desktop 依赖 Docker / PostgreSQL / Redis
 - ❌ Agent 权限靠 Prompt（权限由 Core 强制交集）
@@ -65,12 +65,12 @@
         │  认证 → 配额 → 解析 → 路由 → 重试/熔断      │
         │  → Usage/Cost → 审计                       │
         ├────────────┬─────────────┬─────────────────┤
-        │ Gateway    │ Application │ Provider Adapter│
-        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI 兼容(核心)│
+        │ Gateway    │ Application │ Provider Adapter │
+        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI 兼容(核心) │
         ├────────────┴──────┬──────┴─────────────────┤
-        ▼                   ▼                        ▼
-  SQLite / PostgreSQL   Secret Store        Python Runtime Sidecar
-  (契约测试双库通过)    Keychain/env/mem     parse · PDF/DOCX · 握手/自愈
+        ▼                   ▼                         ▼
+  SQLite / PostgreSQL   Secret Store         Python Runtime Sidecar
+  (契约测试双库通过)    Keychain/env/mem      parse · PDF/DOCX · 握手/自愈
 ```
 
 ---
@@ -88,14 +88,14 @@ cargo build
 cargo run -p aihub-desktop
 ```
 
-> 再跑一次会自动打开已运行实例（单实例语义）；8787 被占用自动退让端口。
+> 再次运行会自动打开已运行实例（单实例语义）；8787 端口被占用时自动退让。
 
 <details>
 <summary><b>无桌面窗口（纯浏览器）</b></summary>
 
 ```bash
 AIHUB_SECRET_BACKEND=memory ./target/debug/aihub-server --mode desktop --print-admin-token
-# 打开 http://127.0.0.1:8787，用 stderr 的 token 登录
+# 打开 http://127.0.0.1:8787，用 stderr 输出的 token 登录
 ```
 
 </details>
@@ -129,7 +129,30 @@ AIHUB_DATABASE_URL=postgres://aihub:密码@127.0.0.1:5432/aihub
 AIHUB_SECRET_BACKEND=env
 AIHUB_ADMIN_TOKEN=<强随机串>
 EOF
-sudo systemctl enable --now aihub   # unit 见部署章节模板，迁移自动执行
+sudo systemctl enable --now aihub   # 迁移自动执行
+```
+
+<details>
+<summary><b>systemd unit 模板</b></summary>
+
+```ini
+[Unit]
+Description=Enterprise AI Hub
+After=network.target postgresql.service
+
+[Service]
+EnvironmentFile=/etc/aihub.env
+ExecStart=/usr/local/bin/aihub-server --mode server
+Restart=on-failure
+User=aihub
+
+[Install]
+WantedBy=multi-user.target
+```
+
+</details>
+
+```bash
 ```
 
 **验证**
@@ -165,16 +188,12 @@ curl http://127.0.0.1:8787/v1/chat/completions \
   -d '{"model":"general-smart","messages":[{"role":"user","content":"hello"}],"stream":true}'
 ```
 
-每次调用均产生 `X-AIH-Request-ID / X-AIH-Resolved-Model / X-AIH-Provider` 响应头，
-并在控制台「请求」页可查完整 Trace/Usage/Cost。
+每次调用均产生 `X-AIH-Request-ID` / `X-AIH-Resolved-Model` / `X-AIH-Provider` 响应头，
+并可在控制台「请求」页查看完整 Trace / Usage / Cost。
 
 </details>
 
 ---
-
----
-
-
 
 ## 测试与质量门禁
 
@@ -190,9 +209,9 @@ cd web && npm run build                                 # TS 类型检查 + 构�
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
 ```
 
-覆盖矩阵：**Provider 契约（§31.3 十一用例）** · 网关集成（鉴权/Failover/流式/限流/撤销 Key）·
-平台 e2e（Prompt/KB/Agent/Eval/DLP/OIDC 验签）· RBAC 多用户与防伪造 · 并发与取消风暴 ·
-SQLite/PostgreSQL 双库契约。
+覆盖矩阵：**Provider 契约（§31.3 十一用例）** · 网关集成（鉴权 / Failover / 流式 / 限流 / 撤销 Key）·
+平台 e2e（Prompt / KB / Agent / Eval / DLP / OIDC 验签）· RBAC 多用户与防伪造 · 并发与取消风暴 ·
+SQLite / PostgreSQL 双库契约。
 
 ---
 
@@ -205,11 +224,11 @@ SQLite/PostgreSQL 双库契约。
 | `AIHUB_MODE` | `desktop` / `server` | `desktop` |
 | `AIHUB_DATA_DIR` | 数据目录（DB、token、documents） | macOS: `~/Library/Application Support/Enterprise AI Hub` |
 | `AIHUB_GATEWAY_PORT` | 网关端口（desktop 冲突自动退让） | `8787` |
-| `AIHUB_ADMIN_TOKEN` | 固定 admin token | 首启生成写入数据目录 |
+| `AIHUB_ADMIN_TOKEN` | 固定 admin token | 首次启动时生成并写入数据目录 |
 | `AIHUB_SECRET_BACKEND` | `keyring` / `memory` / `env` | `keyring` |
-| `AIHUB_DATABASE_URL` | SQLite 路径 或 PostgreSQL URL | `<data>/aihub.db` |
+| `AIHUB_DATABASE_URL` | SQLite 路径或 PostgreSQL URL | `<data>/aihub.db` |
 | `AIHUB_RUNTIME_ENABLED` | 启用 Python Runtime Sidecar | `false` |
-| `AIHUB_OIDC_JWKS_URL` `_ISSUER` `_AUDIENCE` | 三项齐备启用 OIDC 登录 | 未启用 |
+| `AIHUB_OIDC_JWKS_URL` / `_ISSUER` / `_AUDIENCE` | 三项齐备时启用 OIDC 登录 | 未启用 |
 | `AIHUB_LOG_LEVEL` | tracing 日志级别 | `info` |
 
 CLI：`aihub-server --config <toml> --mode <desktop|server> --port <n> --print-admin-token`
