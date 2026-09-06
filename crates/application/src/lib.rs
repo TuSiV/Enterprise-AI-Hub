@@ -1,12 +1,18 @@
 //! Application 层：用例服务 + Gateway 执行流水线（方案 §12）。
 //! 依赖 Domain 与 Port，不依赖具体数据库/HTTP 实现。
 
+pub mod agent_service;
 pub mod apikey;
 pub mod breaker;
 pub mod error;
+pub mod eval_service;
+pub mod iam_service;
+pub mod knowledge_service;
 pub mod limiter;
 pub mod pipeline;
 pub mod playground;
+pub mod policy_service;
+pub mod prompt_service;
 pub mod registry;
 pub mod resolver;
 pub mod seed;
@@ -20,6 +26,8 @@ pub use pipeline::{AuthContext, ChatExecution, ChatPipeline, PipelineStreamEvent
 pub use registry::ProviderRegistry;
 pub use resolver::ModelResolver;
 
+use aihub_domain::platform::*;
+use aihub_domain::prompt::PromptRepository;
 use aihub_domain::repos::*;
 use std::sync::Arc;
 
@@ -36,6 +44,14 @@ pub struct Repos {
     pub requests: Arc<dyn RequestRepository>,
     pub usage: Arc<dyn UsageRepository>,
     pub audit: Arc<dyn AuditRepository>,
+    pub prompts: Arc<dyn PromptRepository>,
+    pub users: Arc<dyn UserRepository>,
+    pub knowledge: Arc<dyn KnowledgeRepository>,
+    pub tools: Arc<dyn ToolRepository>,
+    pub mcp_servers: Arc<dyn McpServerRepository>,
+    pub agents: Arc<dyn AgentRepository>,
+    pub evals: Arc<dyn EvalRepository>,
+    pub policies: Arc<dyn PolicyRepository>,
 }
 
 pub const PLAYGROUND_APPLICATION_KEY: &str = "local-playground";

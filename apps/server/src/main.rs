@@ -1,23 +1,43 @@
 //! aihub-server：Desktop(本地)/Server 双模式宿主（方案 §23/§24）。
+//! 子命令：serve（默认）/ backup / restore（方案 §28.2/§28.3）。
 
-use clap::Parser;
+use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
 #[command(name = "aihub-server", version, about = "Enterprise AI Hub core host")]
 struct Args {
+    #[command(subcommand)]
+    command: Option<Command>,
+
     /// 配置文件路径（TOML）
-    #[arg(long)]
+    #[arg(long, global = true)]
     config: Option<PathBuf>,
     /// 运行模式：desktop | server
-    #[arg(long)]
+    #[arg(long, global = true)]
     mode: Option<String>,
     /// 覆盖网关端口
-    #[arg(long)]
+    #[arg(long, global = true)]
     port: Option<u16>,
     /// 启动后向 stderr 打印 admin token（本地开发便利）
-    #[arg(long, default_value_t = false)]
+    #[arg(long, default_value_t = false, global = true)]
     print_admin_token: bool,
+}
+
+#[derive(Subcommand, Debug)]
+enum Command {
+    /// 启动服务（默认行为）
+    Serve,
+    /// 备份数据库到 tar 包（manifest.json + aihub.db）
+    Backup {
+        #[arg(long)]
+        output: PathBuf,
+    },
+    /// 从备份包恢复数据库（目标库必须不存在）
+    Restore {
+        #[arg(long)]
+        from: PathBuf,
+    },
 }
 
 #[tokio::main]
@@ -32,6 +52,28 @@ async fn main() -> anyhow::Result<()> {
     let mut config = aihub_config::Config::load(args.config.as_deref(), mode_override)?;
     if let Some(port) = args.port {
         config.gateway.port = port;
+    }
+
+    match args.command {
+        Some(Command::Backup { output }) => {
+            aihub_telemetry::init("info");
+            let db_path = config.db_path();
+            aihub_server::backup::create_backup(&db_path, &output).await?;
+            eprintln!(
+                "backup written: {} (db: {})",
+                output.display(),
+                db_path.display()
+            );
+            return Ok(());
+        }
+        Some(Command::Restore { from }) => {
+            aihub_telemetry::init("info");
+            let db_path = config.db_path();
+            aihub_server::backup::restore_backup(&from, &db_path).await?;
+            eprintln!("restored {} -> {}", from.display(), db_path.display());
+            return Ok(());
+        }
+        Some(Command::Serve) | None => {}
     }
 
     // 绑定（desktop 模式端口冲突自动退让 §23.3）

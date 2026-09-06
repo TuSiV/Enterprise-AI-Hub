@@ -60,6 +60,11 @@ pub enum DomainResource {
     KnowledgeBase,
     Document,
     Prompt,
+    Agent,
+    Tool,
+    Eval,
+    User,
+    Policy,
 }
 
 impl DomainResource {
@@ -74,6 +79,11 @@ impl DomainResource {
             DomainResource::KnowledgeBase => "knowledge_base",
             DomainResource::Document => "document",
             DomainResource::Prompt => "prompt",
+            DomainResource::Agent => "agent",
+            DomainResource::Tool => "tool",
+            DomainResource::Eval => "eval",
+            DomainResource::User => "user",
+            DomainResource::Policy => "policy",
         }
     }
 }

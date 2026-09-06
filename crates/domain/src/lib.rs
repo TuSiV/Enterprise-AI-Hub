@@ -5,6 +5,8 @@ pub mod canonical;
 pub mod cost;
 pub mod entities;
 pub mod error;
+pub mod platform;
+pub mod prompt;
 pub mod repos;
 
 pub use canonical::{

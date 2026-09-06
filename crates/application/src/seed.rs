@@ -70,3 +70,51 @@ pub async fn seed_defaults(repos: &Repos) {
         }
     }
 }
+
+/// 内置工具（§20.4 builtin）：echo / now / http_get（只读）。
+pub async fn seed_builtin_tools(repos: &Repos) {
+    use aihub_domain::platform::NewTool;
+    let builtin: &[(&str, &str, &str, serde_json::Value, i64)] = &[
+        (
+            "echo",
+            "Echo",
+            "原样返回输入消息（连通性测试）",
+            serde_json::json!({"type": "object", "properties": {"message": {"type": "string"}}, "required": ["message"]}),
+            5000,
+        ),
+        (
+            "now",
+            "Now",
+            "返回当前 UTC 时间",
+            serde_json::json!({"type": "object", "properties": {}}),
+            2000,
+        ),
+        (
+            "http_get",
+            "HTTP GET",
+            "只读 HTTP GET 工具（URL 受 SSRF 策略约束）",
+            serde_json::json!({"type": "object", "properties": {"url": {"type": "string", "description": "http(s) 地址"}}, "required": ["url"]}),
+            15000,
+        ),
+    ];
+    let kinds: &[&str] = &["builtin", "builtin", "http"];
+    for ((key, name, description, schema, timeout), kind) in builtin.iter().zip(kinds) {
+        if repos.tools.get_by_key(key).await.is_err() {
+            if let Err(e) = repos
+                .tools
+                .create(NewTool {
+                    key: key.to_string(),
+                    name: name.to_string(),
+                    description: Some(description.to_string()),
+                    kind: kind.to_string(),
+                    input_schema: schema.clone(),
+                    config: serde_json::json!({}),
+                    timeout_ms: *timeout,
+                })
+                .await
+            {
+                tracing::warn!(target: "aihub::seed", key, error = %e, "failed to seed builtin tool");
+            }
+        }
+    }
+}

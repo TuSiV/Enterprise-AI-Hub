@@ -24,11 +24,44 @@ fn get_endpoint(state: tauri::State<CoreHandle>) -> String {
     state.endpoint.clone()
 }
 
+/// 单实例（§23.2）：探测默认端口是否已有运行中的实例；
+/// 是则把用户引导到已运行实例（打开系统浏览器）并退出第二个进程。
+fn already_running(endpoint: &str) -> bool {
+    let url = format!("{endpoint}/health/live");
+    std::process::Command::new("curl")
+        .args(["-sf", "-m", "2", &url])
+        .output()
+        .map(|o| o.status.success())
+        .unwrap_or(false)
+}
+
+fn open_in_browser(url: &str) {
+    #[cfg(target_os = "macos")]
+    let _ = std::process::Command::new("open").arg(url).spawn();
+    #[cfg(target_os = "windows")]
+    let _ = std::process::Command::new("cmd")
+        .args(["/c", "start", url])
+        .spawn();
+    #[cfg(target_os = "linux")]
+    let _ = std::process::Command::new("xdg-open").arg(url).spawn();
+}
+
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
         .build()
         .expect("tokio runtime");
+
+    {
+        let config = aihub_config::Config::load(None, Some(aihub_config::Mode::Desktop))
+            .expect("load config");
+        let endpoint = format!("http://127.0.0.1:{}", config.gateway.port);
+        if already_running(&endpoint) {
+            open_in_browser(&endpoint);
+            eprintln!("Enterprise AI Hub is already running at {endpoint}");
+            return;
+        }
+    }
 
     // Core 启动是同步语义（窗口需要 endpoint）；迁移失败时直接退出并记录日志（§23.1 Recovery 由日志与重试承载）。
     let (handle, endpoint) = runtime.block_on(async {

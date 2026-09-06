@@ -4,6 +4,8 @@
 mod applications;
 mod audit;
 mod models;
+mod platform_store;
+mod prompt_iam;
 mod providers;
 mod requests;
 mod virtual_models;
@@ -13,6 +15,11 @@ pub use applications::{
 };
 pub use audit::SqliteAuditRepository;
 pub use models::SqliteModelRepository;
+pub use platform_store::{
+    SqliteAgentRepository, SqliteEvalRepository, SqliteKnowledgeRepository,
+    SqliteMcpServerRepository, SqlitePolicyRepository, SqliteToolRepository,
+};
+pub use prompt_iam::{SqlitePromptRepository, SqliteUserRepository};
 pub use providers::{SqliteProviderHealthRepository, SqliteProviderRepository};
 pub use requests::SqliteRequestRepository;
 pub use virtual_models::SqliteVirtualModelRepository;

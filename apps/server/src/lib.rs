@@ -3,13 +3,20 @@
 //! Desktop 模式（Tauri）复用同一 bootstrap。
 
 pub mod admin;
+pub mod backup;
 
 use std::net::SocketAddr;
 use std::sync::Arc;
 
+use aihub_application::agent_service::{AgentService, ToolExecutor};
+use aihub_application::eval_service::EvalService;
+use aihub_application::iam_service::IamService;
+use aihub_application::knowledge_service::{KnowledgeService, LocalObjectStorage};
 use aihub_application::limiter::RateLimiter;
 use aihub_application::pipeline::ChatPipeline;
 use aihub_application::playground::PlaygroundService;
+use aihub_application::policy_service::PolicyService;
+use aihub_application::prompt_service::PromptService;
 use aihub_application::registry::ProviderRegistry;
 use aihub_application::resolver::ModelResolver;
 use aihub_application::seed;
@@ -44,6 +51,13 @@ pub struct AppState {
     pub registry: Arc<ProviderRegistry>,
     pub resolver: Arc<ModelResolver>,
     pub limiter: Arc<RateLimiter>,
+    pub prompts: Arc<PromptService>,
+    pub iam: Arc<IamService>,
+    pub knowledge: Arc<KnowledgeService>,
+    pub agents: Arc<AgentService>,
+    pub evals: Arc<EvalService>,
+    pub policies: Arc<PolicyService>,
+    pub tool_executor: Arc<ToolExecutor>,
 }
 
 pub struct Core {
@@ -114,6 +128,18 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         )),
         usage: Arc::new(aihub_persistence::SqliteUsageRepository::new(pool.clone())),
         audit: Arc::new(aihub_persistence::SqliteAuditRepository::new(pool.clone())),
+        prompts: Arc::new(aihub_persistence::SqlitePromptRepository::new(pool.clone())),
+        users: Arc::new(aihub_persistence::SqliteUserRepository::new(pool.clone())),
+        knowledge: Arc::new(aihub_persistence::SqliteKnowledgeRepository::new(
+            pool.clone(),
+        )),
+        tools: Arc::new(aihub_persistence::SqliteToolRepository::new(pool.clone())),
+        mcp_servers: Arc::new(aihub_persistence::SqliteMcpServerRepository::new(
+            pool.clone(),
+        )),
+        agents: Arc::new(aihub_persistence::SqliteAgentRepository::new(pool.clone())),
+        evals: Arc::new(aihub_persistence::SqliteEvalRepository::new(pool.clone())),
+        policies: Arc::new(aihub_persistence::SqlitePolicyRepository::new(pool.clone())),
     };
 
     // SecretStore（方案 §21.3）：Desktop 默认 OS Keychain；开发/CI 可选 memory；
@@ -148,9 +174,13 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         breakers.clone(),
     ));
 
-    // 预置数据（§16.3 / playground 应用）
+    // 预置数据（§16.3 / playground 应用）+ 系统角色（附录 A.2）+ 内置工具（§20.4）
     seed::seed_defaults(&repos).await;
+    let iam = Arc::new(IamService::new(repos.clone()));
+    iam.seed_roles().await?;
+    seed::seed_builtin_tools(&repos).await;
 
+    let prompts = Arc::new(PromptService::new(repos.clone()));
     let providers = Arc::new(ProviderService::new(
         repos.clone(),
         registry.clone(),
@@ -161,6 +191,22 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     let applications = Arc::new(ApplicationService::new(repos.clone()));
     let queries = Arc::new(QueryService::new(repos.clone(), resolver.clone()));
     let playground = Arc::new(PlaygroundService::new(pipeline.clone(), repos.clone()));
+    let knowledge = Arc::new(KnowledgeService::new(
+        repos.clone(),
+        registry.clone(),
+        Arc::new(LocalObjectStorage::new(config.documents_dir())),
+    ));
+    let tool_executor = Arc::new(ToolExecutor::new(repos.clone()));
+    let agents = Arc::new(AgentService::new(
+        repos.clone(),
+        pipeline.clone(),
+        tool_executor.clone(),
+    ));
+    let evals = Arc::new(EvalService::new(repos.clone(), pipeline.clone()));
+    let policies = Arc::new(PolicyService::new(
+        repos.clone(),
+        config.mode == aihub_config::Mode::Desktop,
+    ));
 
     let admin_token = resolve_admin_token(&config)?;
     let gateway_endpoint = format!("http://{}:{}", config.gateway.host, config.gateway.port);
@@ -180,6 +226,13 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         registry,
         resolver,
         limiter,
+        prompts,
+        iam,
+        knowledge,
+        agents,
+        evals,
+        policies,
+        tool_executor,
     };
 
     let gateway_state = aihub_gateway::GatewayState {

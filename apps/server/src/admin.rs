@@ -10,6 +10,7 @@ use axum::response::{IntoResponse, Response};
 use axum::routing::{delete, get, post, put};
 use axum::{Json, Router};
 use serde::Deserialize;
+use serde_json::{json, Value};
 
 use crate::AppState;
 
@@ -91,6 +92,108 @@ pub fn router(state: AppState) -> Router {
         // playground
         .route("/v1/admin/playground/run", post(playground_run))
         .route("/v1/admin/playground/stream", post(playground_stream))
+        // M8 Prompt Center
+        .route("/v1/admin/prompts", get(prompts_list).post(prompts_create))
+        .route(
+            "/v1/admin/prompts/{id}",
+            get(prompts_detail)
+                .patch(prompts_update)
+                .delete(prompts_delete),
+        )
+        .route(
+            "/v1/admin/prompts/{id}/versions",
+            get(prompts_versions).post(prompts_create_version),
+        )
+        .route(
+            "/v1/admin/prompt-versions/{versionId}/publish",
+            post(prompts_publish),
+        )
+        .route(
+            "/v1/admin/prompt-versions/{versionId}/deprecate",
+            post(prompts_deprecate),
+        )
+        // M12/M13 Knowledge
+        .route("/v1/admin/knowledge-bases", get(kb_list).post(kb_create))
+        .route(
+            "/v1/admin/knowledge-bases/{id}",
+            get(kb_detail).delete(kb_delete),
+        )
+        .route(
+            "/v1/admin/knowledge-bases/{id}/bind-embedding-model",
+            post(kb_bind_model),
+        )
+        .route("/v1/admin/knowledge-bases/{id}/documents", get(doc_list))
+        .route("/v1/admin/knowledge-bases/{id}/query", post(kb_query))
+        .route(
+            "/v1/admin/documents/{id}/upload-content",
+            post(doc_upload_content),
+        )
+        .route(
+            "/v1/admin/documents/{id}",
+            get(doc_detail).delete(doc_delete),
+        )
+        // M14/M15 Agent / Tool / MCP
+        .route("/v1/admin/tools", get(tools_list).post(tools_create))
+        .route("/v1/admin/tools/{id}", delete(tools_delete))
+        .route("/v1/admin/mcp-servers", get(mcp_list).post(mcp_create))
+        .route("/v1/admin/mcp-servers/{id}", delete(mcp_delete))
+        .route("/v1/admin/agents", get(agents_list).post(agents_create))
+        .route(
+            "/v1/admin/agents/{id}",
+            get(agent_detail).delete(agents_delete),
+        )
+        .route(
+            "/v1/admin/agents/{id}/versions",
+            get(agent_versions).post(agent_create_version),
+        )
+        .route("/v1/admin/agents/{id}/run", post(agent_run))
+        .route(
+            "/v1/admin/agent-versions/{versionId}/publish",
+            post(agent_publish),
+        )
+        .route(
+            "/v1/admin/agent-versions/{versionId}/deprecate",
+            post(agent_deprecate),
+        )
+        .route("/v1/admin/agent-runs/{runId}", get(agent_run_detail))
+        // M16 Eval
+        .route(
+            "/v1/admin/evals/datasets",
+            get(eval_datasets_list).post(eval_datasets_create),
+        )
+        .route(
+            "/v1/admin/evals/datasets/{id}",
+            get(eval_dataset_detail).delete(eval_datasets_delete),
+        )
+        .route(
+            "/v1/admin/evals/datasets/{id}/cases",
+            get(eval_cases_list).post(eval_cases_create),
+        )
+        .route(
+            "/v1/admin/evals/datasets/{id}/runs",
+            get(eval_runs_list).post(eval_run_create),
+        )
+        .route("/v1/admin/evals/runs/{runId}", get(eval_run_detail))
+        // M17 Security / IAM
+        .route(
+            "/v1/admin/security/routing-policies",
+            get(routing_policies_list).post(routing_policies_upsert),
+        )
+        .route(
+            "/v1/admin/security/routing-policies/{id}",
+            delete(routing_policies_delete),
+        )
+        .route(
+            "/v1/admin/security/policies",
+            get(security_policies_list).post(security_policies_upsert),
+        )
+        .route(
+            "/v1/admin/security/policies/{id}",
+            delete(security_policies_delete),
+        )
+        .route("/v1/admin/security/dlp/scan", post(dlp_scan))
+        .route("/v1/admin/users", get(users_list).post(users_create))
+        .route("/v1/auth/login", post(auth_login))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin_auth,
@@ -117,7 +220,17 @@ async fn admin_auth(
         .and_then(|v| v.to_str().ok())
         .map(str::trim);
     let provided = from_bearer.or(from_header);
-    if provided != Some(state.admin_token.as_str()) {
+    // IAM session token（M10 RBAC）：aih_session_ 前缀走用户会话校验
+    let session_ok = match provided {
+        Some(token) if token.starts_with("aih_session_") => state
+            .iam
+            .session_user(token)
+            .await
+            .map(|u| u.status == "active")
+            .unwrap_or(false),
+        _ => false,
+    };
+    if provided != Some(state.admin_token.as_str()) && !session_ok {
         return (
             StatusCode::UNAUTHORIZED,
             Json(ApiErrorBody::new(
@@ -844,3 +957,911 @@ async fn playground_stream(
 
 #[allow(dead_code)]
 async fn unused_headers(_: HeaderMap) {}
+
+// ================= M8 Prompt Center =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct PromptBody {
+    key: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    systemTemplate: Option<String>,
+    userTemplate: Option<String>,
+    variablesSchema: Option<Value>,
+    modelConfig: Option<Value>,
+}
+
+async fn prompts_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.prompts.list().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_create(
+    State(state): State<AppState>,
+    Json(body): Json<PromptBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .prompts
+        .create(
+            body.key.unwrap_or_default(),
+            body.name.unwrap_or_default(),
+            body.description,
+        )
+        .await
+    {
+        Ok(p) => Ok(Json(json!({"data": p, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.prompts.detail(&id).await {
+        Ok(d) => Ok(Json(json!({"data": d, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_update(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<PromptBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .prompts
+        .update(&id, body.name.unwrap_or_default(), body.description)
+        .await
+    {
+        Ok(p) => Ok(Json(json!({"data": p, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.prompts.delete(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_create_version(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<PromptBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let input = aihub_domain::prompt::NewPromptVersion {
+        prompt_id: id.clone(),
+        system_template: body.systemTemplate,
+        user_template: body.userTemplate,
+        variables_schema: body.variablesSchema.unwrap_or(json!({})),
+        model_config: body.modelConfig.unwrap_or(json!({})),
+        output_schema: None,
+        created_by: None,
+    };
+    match state.prompts.create_version(&id, input).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_versions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.prompts.versions_for(&id).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_publish(
+    State(state): State<AppState>,
+    Path(version_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.prompts.publish(&version_id).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn prompts_deprecate(
+    State(state): State<AppState>,
+    Path(version_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.prompts.deprecate(&version_id).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+// ================= M12/M13 Knowledge =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct KbBody {
+    key: Option<String>,
+    name: Option<String>,
+    visibility: Option<String>,
+    embeddingModelId: Option<String>,
+    query: Option<String>,
+    topK: Option<usize>,
+    filename: Option<String>,
+    mimeType: Option<String>,
+    content: Option<String>,
+    modelId: Option<String>,
+}
+
+async fn kb_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.list_kbs().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn kb_create(
+    State(state): State<AppState>,
+    Json(body): Json<KbBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .knowledge
+        .create_kb(
+            &body.key.unwrap_or_default(),
+            &body.name.unwrap_or_default(),
+            body.visibility.as_deref().unwrap_or("private"),
+            body.embeddingModelId,
+        )
+        .await
+    {
+        Ok(kb) => Ok(Json(json!({"data": kb, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn kb_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.list_kbs().await {
+        Ok(kbs) => {
+            let kb = kbs
+                .into_iter()
+                .find(|k| k.kb.id == id)
+                .map(|k| k.kb)
+                .ok_or_else(|| {
+                    (
+                        StatusCode::NOT_FOUND,
+                        Json(ApiErrorBody::new("NOT_FOUND", "kb not found")),
+                    )
+                        .into_response()
+                })?;
+            let docs = state
+                .knowledge
+                .list_documents(&id)
+                .await
+                .unwrap_or_default();
+            Ok(Json(
+                json!({"data": {"kb": kb, "documents": docs}, "meta": {}}),
+            ))
+        }
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn kb_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.delete_kb(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn kb_bind_model(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<KbBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .knowledge
+        .bind_embedding_model(&id, &body.modelId.unwrap_or_default())
+        .await
+    {
+        Ok(kb) => Ok(Json(json!({"data": kb, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn doc_list(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.list_documents(&id).await {
+        Ok(docs) => Ok(Json(json!({"data": docs, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+/// 文本内容上传（M12）：txt/md/csv/json 内联上传并同步索引
+async fn doc_upload_content(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<KbBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let content = body.content.unwrap_or_default();
+    let filename = body.filename.unwrap_or_else(|| "document.txt".into());
+    let mime = body.mimeType.unwrap_or_else(|| "text/plain".into());
+    match state
+        .knowledge
+        .upload_document(&id, &filename, &mime, content.into_bytes(), None)
+        .await
+    {
+        Ok(doc) => Ok(Json(json!({"data": doc, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn kb_query(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<KbBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    // id 兼容 key
+    let key = match state.repos.knowledge.get_kb(&id).await {
+        Ok(kb) => kb.key,
+        Err(_) => id.clone(),
+    };
+    match state
+        .knowledge
+        .query(
+            &key,
+            &body.query.unwrap_or_default(),
+            body.topK.unwrap_or(5),
+        )
+        .await
+    {
+        Ok(result) => Ok(Json(json!({"data": result, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn doc_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.document_detail(&id).await {
+        Ok((doc, chunks)) => {
+            let chunk_preview: Vec<Value> = chunks
+                .iter()
+                .enumerate()
+                .take(20)
+                .map(|(i, c)| json!({"index": i, "tokens": c.token_count, "preview": c.content.chars().take(200).collect::<String>(), "embedded": c.embedding.is_some()}))
+                .collect();
+            Ok(Json(
+                json!({"data": {"document": doc, "chunkCount": chunks.len(), "chunks": chunk_preview}, "meta": {}}),
+            ))
+        }
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn doc_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.knowledge.delete_document(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+// ================= M14/M15 Agent / Tool / MCP =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct AgentBody {
+    key: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    modelRef: Option<String>,
+    systemPrompt: Option<String>,
+    maxSteps: Option<i32>,
+    maxToolCalls: Option<i32>,
+    timeoutMs: Option<i64>,
+    allowedTools: Option<Vec<String>>,
+    input: Option<Value>,
+    config: Option<Value>,
+    kind: Option<String>,
+    transport: Option<String>,
+    endpointOrCommand: Option<String>,
+    inputSchema: Option<Value>,
+    timeoutSec: Option<i64>,
+}
+
+fn version_from_body(agent_id: &str, body: &AgentBody) -> aihub_domain::platform::NewAgentVersion {
+    aihub_domain::platform::NewAgentVersion {
+        agent_id: agent_id.to_string(),
+        model_ref: body
+            .modelRef
+            .clone()
+            .unwrap_or_else(|| "general-smart".into()),
+        prompt_version_id: None,
+        system_prompt: body.systemPrompt.clone(),
+        max_steps: body.maxSteps.unwrap_or(8),
+        max_tool_calls: body.maxToolCalls.unwrap_or(16),
+        timeout_ms: body.timeoutMs.unwrap_or(120_000),
+        max_cost_microunits: None,
+        allowed_tools: body.allowedTools.clone().unwrap_or_default(),
+        knowledge_bindings: vec![],
+        status: "draft".into(),
+    }
+}
+
+async fn tools_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.list_tools().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn tools_create(
+    State(state): State<AppState>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .agents
+        .create_tool(aihub_domain::platform::NewTool {
+            key: body.key.unwrap_or_default(),
+            name: body.name.unwrap_or_default(),
+            description: body.description.clone(),
+            kind: body.kind.clone().unwrap_or_else(|| "builtin".into()),
+            input_schema: body.inputSchema.clone().unwrap_or(json!({})),
+            config: body.config.clone().unwrap_or(json!({})),
+            timeout_ms: (body.timeoutSec.unwrap_or(30)) * 1000,
+        })
+        .await
+    {
+        Ok(t) => Ok(Json(json!({"data": t, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn tools_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.delete_tool(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn mcp_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.list_mcp_servers().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn mcp_create(
+    State(state): State<AppState>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .agents
+        .create_mcp_server(aihub_domain::platform::NewMcpServer {
+            key: body.key.unwrap_or_default(),
+            name: body.name.unwrap_or_default(),
+            transport: body
+                .transport
+                .clone()
+                .unwrap_or_else(|| "streamable-http".into()),
+            endpoint_or_command: body.endpointOrCommand.clone().unwrap_or_default(),
+            config: body.config.clone().unwrap_or(json!({})),
+        })
+        .await
+    {
+        Ok(s) => Ok(Json(json!({"data": s, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn mcp_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.delete_mcp_server(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agents_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.list().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agents_create(
+    State(state): State<AppState>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let key = body.key.clone().unwrap_or_default();
+    let name = body.name.clone().unwrap_or_default();
+    match state
+        .agents
+        .create(
+            &key,
+            &name,
+            body.description.clone(),
+            version_from_body("", &body),
+        )
+        .await
+    {
+        Ok((agent, version)) => Ok(Json(
+            json!({"data": {"agent": agent, "version": version}, "meta": {}}),
+        )),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.agents.get(&id).await {
+        Ok(agent) => {
+            let versions = state
+                .repos
+                .agents
+                .versions_for(&id)
+                .await
+                .unwrap_or_default();
+            Ok(Json(
+                json!({"data": {"agent": agent, "versions": versions}, "meta": {}}),
+            ))
+        }
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agents_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.agents.delete(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_versions(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.versions(&id).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_create_version(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .agents
+        .create_version(&id, version_from_body(&id, &body))
+        .await
+    {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_publish(
+    State(state): State<AppState>,
+    Path(version_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.publish(&version_id).await {
+        Ok(v) => Ok(Json(json!({"data": v, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_deprecate(
+    State(state): State<AppState>,
+    Path(version_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.deprecate(&version_id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deprecated": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_run(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<AgentBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    // id 兼容 key
+    let key = match state.repos.agents.get(&id).await {
+        Ok(agent) => agent.key,
+        Err(_) => id.clone(),
+    };
+    let ctx = aihub_application::pipeline::AuthContext {
+        application: state
+            .repos
+            .applications
+            .get_by_key(aihub_application::PLAYGROUND_APPLICATION_KEY)
+            .await
+            .map_err(|e| domain_error_response(&e))?,
+        api_key_id: None,
+        actor_type: "admin",
+    };
+    match state
+        .agents
+        .run_published(&key, body.input.unwrap_or(json!({})), &ctx)
+        .await
+    {
+        Ok(result) => Ok(Json(json!({"data": result, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn agent_run_detail(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.agents.run_detail(&run_id).await {
+        Ok((run, calls)) => Ok(Json(
+            json!({"data": {"run": run, "toolCalls": calls}, "meta": {}}),
+        )),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+// ================= M16 Eval =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct EvalBody {
+    key: Option<String>,
+    name: Option<String>,
+    description: Option<String>,
+    label: Option<String>,
+    candidate: Option<Value>,
+    judgeConfig: Option<Value>,
+    caseName: Option<String>,
+    input: Option<Value>,
+    expectedOutput: Option<String>,
+}
+
+async fn eval_datasets_list(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.evals.list_datasets().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_datasets_create(
+    State(state): State<AppState>,
+    Json(body): Json<EvalBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .evals
+        .create_dataset(
+            &body.key.unwrap_or_default(),
+            &body.name.unwrap_or_default(),
+            body.description,
+        )
+        .await
+    {
+        Ok(d) => Ok(Json(json!({"data": d, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_dataset_detail(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let dataset = state
+        .repos
+        .evals
+        .get_dataset(&id)
+        .await
+        .map_err(|e| domain_error_response(&e))?;
+    let cases = state.repos.evals.list_cases(&id).await.unwrap_or_default();
+    let runs = state.repos.evals.list_runs(&id).await.unwrap_or_default();
+    Ok(Json(
+        json!({"data": {"dataset": dataset, "cases": cases, "runs": runs}, "meta": {}}),
+    ))
+}
+
+async fn eval_datasets_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.evals.delete_dataset(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_cases_list(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.evals.list_cases(&id).await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_cases_create(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<EvalBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .evals
+        .add_case(
+            &id,
+            &body.caseName.clone().unwrap_or_else(|| "case".into()),
+            body.input.clone().unwrap_or(json!({})),
+            body.expectedOutput.clone(),
+        )
+        .await
+    {
+        Ok(c) => Ok(Json(json!({"data": c, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_runs_list(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.evals.runs(&id).await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_run_create(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+    Json(body): Json<EvalBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let ctx = aihub_application::pipeline::AuthContext {
+        application: state
+            .repos
+            .applications
+            .get_by_key(aihub_application::PLAYGROUND_APPLICATION_KEY)
+            .await
+            .map_err(|e| domain_error_response(&e))?,
+        api_key_id: None,
+        actor_type: "admin",
+    };
+    match state
+        .evals
+        .run(
+            &id,
+            &body.label.clone().unwrap_or_else(|| "run".into()),
+            body.candidate.clone().unwrap_or(json!({})),
+            body.judgeConfig.clone().unwrap_or(json!({})),
+            &ctx,
+        )
+        .await
+    {
+        Ok(outcome) => Ok(Json(json!({"data": outcome, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn eval_run_detail(
+    State(state): State<AppState>,
+    Path(run_id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.evals.run_detail(&run_id).await {
+        Ok((run, results)) => Ok(Json(
+            json!({"data": {"run": run, "results": results}, "meta": {}}),
+        )),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+// ================= M17 Security / IAM =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct SecurityBody {
+    key: Option<String>,
+    name: Option<String>,
+    policyType: Option<String>,
+    priority: Option<i32>,
+    rule: Option<Value>,
+    action: Option<Value>,
+    enabled: Option<bool>,
+    content: Option<String>,
+    classification: Option<String>,
+    providerKind: Option<String>,
+    id: Option<String>,
+    username: Option<String>,
+    password: Option<String>,
+    displayName: Option<String>,
+    role: Option<String>,
+}
+
+async fn routing_policies_list(
+    State(state): State<AppState>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.policies.list_routing().await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn routing_policies_upsert(
+    State(state): State<AppState>,
+    Json(body): Json<SecurityBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .policies
+        .upsert_routing_policy(aihub_domain::platform::RoutingPolicy {
+            id: body.id.clone().unwrap_or_default(),
+            key: body.key.clone().unwrap_or_default(),
+            name: body.name.clone().unwrap_or_default(),
+            priority: body.priority.unwrap_or(100),
+            match_rules: body.rule.clone().unwrap_or(json!({})),
+            action: body.action.clone().unwrap_or(json!({})),
+            enabled: body.enabled.unwrap_or(true),
+        })
+        .await
+    {
+        Ok(()) => Ok(Json(json!({"data": {"saved": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn routing_policies_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.policies.delete_routing(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn security_policies_list(
+    State(state): State<AppState>,
+    Query(params): Query<UsageQueryParams>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let _ = &params;
+    match state.policies.list_security(None).await {
+        Ok(list) => Ok(Json(json!({"data": list, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn security_policies_upsert(
+    State(state): State<AppState>,
+    Json(body): Json<SecurityBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .policies
+        .upsert_security_policy(aihub_domain::platform::SecurityPolicy {
+            id: body.id.clone().unwrap_or_default(),
+            key: body.key.clone().unwrap_or_default(),
+            name: body.name.clone().unwrap_or_default(),
+            policy_type: body.policyType.clone().unwrap_or_else(|| "dlp".into()),
+            priority: body.priority.unwrap_or(100),
+            rule: body.rule.clone().unwrap_or(json!({})),
+            action: body.action.clone().unwrap_or(json!({})),
+            enabled: body.enabled.unwrap_or(true),
+        })
+        .await
+    {
+        Ok(()) => Ok(Json(json!({"data": {"saved": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn security_policies_delete(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.policies.delete_security(&id).await {
+        Ok(()) => Ok(Json(json!({"data": {"deleted": true}, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn dlp_scan(
+    State(state): State<AppState>,
+    Json(body): Json<SecurityBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .policies
+        .dlp_scan(&body.content.unwrap_or_default())
+        .await
+    {
+        Ok(verdict) => Ok(Json(json!({"data": verdict, "meta": {}}))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn users_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.iam.list().await {
+        Ok(list) => {
+            let users: Vec<Value> = list
+                .iter()
+                .map(|u| json!({"id": u.id, "username": u.username, "displayName": u.display_name, "status": u.status, "identityProvider": u.identity_provider}))
+                .collect();
+            Ok(Json(json!({"data": users, "meta": {}})))
+        }
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn users_create(
+    State(state): State<AppState>,
+    Json(body): Json<SecurityBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .iam
+        .create_user(
+            &body.username.clone().unwrap_or_default(),
+            &body
+                .displayName
+                .clone()
+                .unwrap_or_else(|| body.username.clone().unwrap_or_default()),
+            body.password.as_deref(),
+            body.role.as_deref().unwrap_or("developer"),
+        )
+        .await
+    {
+        Ok(user) => Ok(Json(
+            json!({"data": {"id": user.id, "username": user.username, "displayName": user.display_name}, "meta": {}}),
+        )),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn auth_login(
+    State(state): State<AppState>,
+    Json(body): Json<SecurityBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state
+        .iam
+        .login(
+            &body.username.clone().unwrap_or_default(),
+            &body.password.clone().unwrap_or_default(),
+        )
+        .await
+    {
+        Ok((user, token)) => Ok(Json(
+            json!({"data": {"token": token, "user": {"id": user.id, "username": user.username}}, "meta": {}}),
+        )),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
