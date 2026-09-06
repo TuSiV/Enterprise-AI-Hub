@@ -11,6 +11,11 @@ import Models from './pages/Models'
 import VirtualModels from './pages/VirtualModels'
 import Applications from './pages/Applications'
 import Playground from './pages/Playground'
+import Prompts from './pages/Prompts'
+import Knowledge from './pages/Knowledge'
+import Agents from './pages/Agents'
+import Evals from './pages/Evals'
+import Security from './pages/Security'
 import Requests from './pages/Requests'
 import Audit from './pages/Audit'
 import Settings from './pages/Settings'
@@ -29,6 +34,11 @@ function Shell({ children }: { children: React.ReactNode }) {
     ['/virtual-models', 'Virtual Models'],
     ['/applications', '应用与 Key'],
     ['/playground', 'Playground'],
+    ['/prompts', 'Prompts'],
+    ['/knowledge', '知识库'],
+    ['/agents', 'Agents'],
+    ['/evals', '评测'],
+    ['/security', '安全'],
     ['/requests', '请求'],
     ['/audit', '审计'],
     ['/settings', '设置'],
@@ -98,6 +108,11 @@ function App() {
                   <Route path="/virtual-models" element={<VirtualModels />} />
                   <Route path="/applications" element={<Applications />} />
                   <Route path="/playground" element={<Playground />} />
+                  <Route path="/prompts" element={<Prompts />} />
+                  <Route path="/knowledge" element={<Knowledge />} />
+                  <Route path="/agents" element={<Agents />} />
+                  <Route path="/evals" element={<Evals />} />
+                  <Route path="/security" element={<Security />} />
                   <Route path="/requests" element={<Requests />} />
                   <Route path="/audit" element={<Audit />} />
                   <Route path="/settings" element={<Settings />} />

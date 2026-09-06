@@ -20,9 +20,17 @@
 | Web 控制台 | ✅ | React + TS：总览 / Providers / 模型 / Virtual Models / 应用与 Key / Playground（流式）/ 请求 / 审计 / 设置 |
 | Desktop 壳（Tauri 2） | ✅ | 同一 Rust Core 嵌入，loopback Gateway + 自动登录桥接 |
 | Mock 上游 | ✅ | `aihub-mock-openai`：本地 OpenAI 兼容 mock，支持故障注入（x-mock-behavior） |
-| Python Runtime（M11+） | 🚧 | 协议脚手架（health handshake），Parse/RAG/Agent 后续接入 |
+| Prompt Center（M8） | ✅ | 版本化 draft→published→deprecated，发布不可变、唯一 published 可追溯 |
+| Desktop 产品化（M9） | ✅ | 单实例锁、backup/restore（VACUUM INTO + tar）、端口退让 |
+| Server 数据面（M10） | ✅ | PostgreSQL Adapter（16 仓储）+ 双方言迁移 + 与 SQLite 同一套契约测试（本机 PG 18 验证） |
+| IAM/RBAC（M10） | ✅ | 本地用户 + 5 系统角色权限矩阵、登录 session、RBAC 鉴权接入 Admin API |
+| Python Runtime（M11） | ✅ | runtime-client + managed sidecar（PORT 握手/崩溃有界重启/手动重启）+ remote 模式 + parse 端点（txt/md/pdf/docx） |
+| Knowledge/RAG（M12/13） | ✅ | 上传去重→本地对象存储→chunk（页码保留）→embedding→余弦检索→引用；PDF/DOCX 走 runtime |
+| Agent/Tool/MCP（M14/15） | ✅ | 版本化 Agent + 循环执行（maxSteps/maxToolCalls/cost guard）+ builtin/http(只读)/mcp(streamable-http) 工具 + ToolCall 全量审计 |
+| Evaluation（M16） | ✅ | dataset/cases/runs、rule 打分 + 可选 LLM Judge、成本/延迟回归对比 |
+| Security（M17） | ✅ | 数据分级→provider 矩阵、DLP（手机号/密钥脱敏+自定义规则）、SSRF 目标校验、routing/security 策略表 |
 
-未实现（按方案节奏推进）：Anthropic/Gemini Adapter、Server 模式 RBAC/OIDC、Knowledge/RAG、Agent/MCP/Eval、DLP——见方案 §32 里程碑与 §44 演进路线。
+未实现（明确标注）：Anthropic/Gemini 专属 Adapter、OIDC/TrustedHeader IdentityProvider、Connected Desktop 多工作区、分布式限流——见方案 §44 演进路线（Stage F 按需启动）。
 
 ## 快速开始
 
@@ -116,7 +124,8 @@ OpenAI 兼容客户端 ───────────────────
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test                                              # 25 tests：domain 单元 / SQLite 契约 / Gateway e2e（failover、流式、限流、撤销 Key）
+cargo test                                              # 41+ tests：domain 单元 / SQLite 契约 / Gateway+Platform e2e
+TEST_DATABASE_URL=... cargo test -p aihub-persistence --test pg_contract -- --ignored   # PostgreSQL 契约（本机 PG 18 验证）
 cd web && npm run build                                 # tsc --noEmit + vite build
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
 ```

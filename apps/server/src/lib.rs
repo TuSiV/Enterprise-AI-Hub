@@ -6,6 +6,7 @@ pub mod admin;
 pub mod backup;
 
 use std::net::SocketAddr;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use aihub_application::agent_service::{AgentService, ToolExecutor};
@@ -20,6 +21,7 @@ use aihub_application::prompt_service::PromptService;
 use aihub_application::registry::ProviderRegistry;
 use aihub_application::resolver::ModelResolver;
 use aihub_application::seed;
+use aihub_runtime_client::{RuntimeClient, RuntimeSupervisor};
 use aihub_application::services::{
     ApplicationService, ModelService, ProviderService, QueryService, VirtualModelService,
 };
@@ -58,6 +60,7 @@ pub struct AppState {
     pub evals: Arc<EvalService>,
     pub policies: Arc<PolicyService>,
     pub tool_executor: Arc<ToolExecutor>,
+    pub runtime: Arc<RuntimeSupervisor>,
 }
 
 pub struct Core {
@@ -236,10 +239,23 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     let applications = Arc::new(ApplicationService::new(repos.clone()));
     let queries = Arc::new(QueryService::new(repos.clone(), resolver.clone()));
     let playground = Arc::new(PlaygroundService::new(pipeline.clone(), repos.clone()));
+    let runtime_client = if config.runtime.enabled {
+        Some(RuntimeClient::new(
+            config
+                .runtime
+                .url
+                .clone()
+                .unwrap_or_else(|| "http://127.0.0.1:0".into()),
+            std::env::var("AIHUB_RUNTIME_TOKEN").unwrap_or_default(),
+        ))
+    } else {
+        None
+    };
     let knowledge = Arc::new(KnowledgeService::new(
         repos.clone(),
         registry.clone(),
         Arc::new(LocalObjectStorage::new(config.documents_dir())),
+        runtime_client,
     ));
     let tool_executor = Arc::new(ToolExecutor::new(repos.clone()));
     let agents = Arc::new(AgentService::new(
@@ -252,6 +268,32 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         repos.clone(),
         config.mode == aihub_config::Mode::Desktop,
     ));
+
+    // Python Runtime（M11，方案 §13.2/§23.4）：managed sidecar 或 remote runtime
+    let runtime: Arc<RuntimeSupervisor> = if config.runtime.enabled {
+        match config.runtime.mode.as_str() {
+            "remote" => {
+                // remote runtime：仅持客户端连接（健康检查由请求路径按需执行）
+                let _client = RuntimeClient::new(
+                    config.runtime.url.clone().unwrap_or_default(),
+                    std::env::var("AIHUB_RUNTIME_TOKEN").unwrap_or_default(),
+                );
+                RuntimeSupervisor::disabled()
+            }
+            _ => {
+                let python_path = std::env::var("AIHUB_RUNTIME_PYTHON")
+                    .unwrap_or_else(|_| "python3".into());
+                let runtime_dir = std::env::var("AIHUB_RUNTIME_DIR")
+                    .map(PathBuf::from)
+                    .unwrap_or_else(|_| PathBuf::from("../runtime"));
+                let supervisor = RuntimeSupervisor::new_managed(python_path, runtime_dir);
+                supervisor.spawn();
+                supervisor
+            }
+        }
+    } else {
+        RuntimeSupervisor::disabled()
+    };
 
     let admin_token = resolve_admin_token(&config)?;
     let gateway_endpoint = format!("http://{}:{}", config.gateway.host, config.gateway.port);
@@ -278,6 +320,7 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         evals,
         policies,
         tool_executor,
+        runtime,
     };
 
     let gateway_state = aihub_gateway::GatewayState {

@@ -20,6 +20,7 @@ aihub-gateway.workspace = true
 aihub-persistence.workspace = true
 aihub-provider-core.workspace = true
 aihub-provider-openai-compatible.workspace = true
+aihub-runtime-client.workspace = true
 aihub-secrets.workspace = true
 aihub-telemetry.workspace = true
 anyhow.workspace = true

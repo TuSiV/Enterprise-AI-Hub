@@ -2,11 +2,22 @@ import { useEffect, useRef, useState } from 'react'
 import { api } from '../api/client'
 import type { VirtualModelDto, ModelDto, UsageSummary } from '../api/types'
 import { formatCost } from '../api/types'
-import { Button, Card, Field, Badge } from '../components/ui'
+import { Button, Card, Field, Badge, Table } from '../components/ui'
 
 interface ChatMsg {
   role: 'user' | 'assistant'
   content: string
+}
+
+// Compare Mode（§18.4）：同一输入跑多个候选并排对比
+interface CompareResult {
+  model: string
+  content: string
+  latencyMs?: number
+  ttftMs?: number
+  tokens?: number
+  costMicrounits?: number
+  error?: string
 }
 
 interface Metrics {
@@ -157,6 +168,43 @@ export default function Playground() {
     accSnapshot.current = reply
   }, [reply])
 
+  const [candidates, setCandidates] = useState('')
+  const [compareResults, setCompareResults] = useState<CompareResult[] | null>(null)
+  const [comparing, setComparing] = useState(false)
+
+  const runCompare = async () => {
+    if (comparing || !input.trim()) return
+    const models = candidates.split(',').map((m) => m.trim()).filter(Boolean)
+    if (models.length < 2) {
+      setError('请输入至少两个候选模型（逗号分隔）')
+      return
+    }
+    setComparing(true)
+    setError('')
+    const results: CompareResult[] = []
+    for (const m of models) {
+      try {
+        const r = await api.post<any>('/api/v1/admin/playground/run', {
+          model: m,
+          messages: [...messages, { role: 'user', content: input }].map((x) => ({ role: x.role, content: x.content })),
+          system: system || undefined,
+          temperature: Number(temperature) || undefined,
+        })
+        results.push({
+          model: m,
+          content: r.content ?? '',
+          latencyMs: r.latencyMs,
+          tokens: r.usage?.total_tokens,
+          costMicrounits: r.costMicrounits,
+        })
+      } catch (e: any) {
+        results.push({ model: m, content: '', error: e.message })
+      }
+    }
+    setCompareResults(results)
+    setComparing(false)
+  }
+
   const reset = () => {
     setMessages([])
     setReply('')
@@ -239,11 +287,17 @@ export default function Playground() {
                 placeholder="输入消息，⌘/Ctrl+Enter 发送"
               />
             </div>
-            <div style={{ marginTop: 10, display: 'flex', gap: 8 }}>
+            <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <Button variant="primary" onClick={run} disabled={running || !input.trim()}>
                 {running ? '生成中…' : '发送'}
               </Button>
+              <Button onClick={runCompare} disabled={comparing || !input.trim()}>
+                {comparing ? '对比中…' : 'Compare 多候选'}
+              </Button>
             </div>
+            <Field label="Compare 候选（逗号分隔模型 key）">
+              <input value={candidates} onChange={(e) => setCandidates(e.target.value)} placeholder="general-fast, general-smart, mock-mini" />
+            </Field>
           </Card>
           <Card title="回复">
             {error && <p style={{ color: 'var(--err)' }}>{error}</p>}
@@ -256,6 +310,7 @@ export default function Playground() {
 
         <div>
           <Card title="指标">
+            {/* 指标卡保持不变 */}
             <div className="pg-metrics">
               <div className="row">
                 <span className="dim">模型</span>
@@ -295,6 +350,24 @@ export default function Playground() {
           </Card>
         </div>
       </div>
+
+      {compareResults && (
+        <Card title="Compare 对比结果（同一输入）">
+          <Table head={['候选', '结果', '延迟', 'Tokens', '成本']}>
+            {compareResults.map((r) => (
+              <tr key={r.model}>
+                <td className="mono">{r.model}</td>
+                <td className="dim" style={{ maxWidth: 380 }}>
+                  {r.error ? <span style={{ color: 'var(--err)' }}>{r.error}</span> : r.content.slice(0, 140)}
+                </td>
+                <td>{r.latencyMs ?? '-'} ms</td>
+                <td>{r.tokens ?? '-'}</td>
+                <td>{formatCost(r.costMicrounits)}</td>
+              </tr>
+            ))}
+          </Table>
+        </Card>
+      )}
     </>
   )
 }

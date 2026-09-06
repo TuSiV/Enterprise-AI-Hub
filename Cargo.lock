@@ -34,6 +34,7 @@ dependencies = [
  "aihub-api-types",
  "aihub-domain",
  "aihub-provider-core",
+ "aihub-runtime-client",
  "aihub-secrets",
  "async-trait",
  "chrono",
@@ -172,6 +173,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "aihub-runtime-client"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "base64 0.22.1",
+ "reqwest 0.12.28",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "uuid",
+]
+
+[[package]]
 name = "aihub-secrets"
 version = "0.1.0"
 dependencies = [
@@ -196,6 +211,7 @@ dependencies = [
  "aihub-persistence",
  "aihub-provider-core",
  "aihub-provider-openai-compatible",
+ "aihub-runtime-client",
  "aihub-secrets",
  "aihub-telemetry",
  "anyhow",

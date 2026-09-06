@@ -53,6 +53,8 @@ pub struct KnowledgeService {
     repos: Repos,
     registry: Arc<ProviderRegistry>,
     storage: Arc<LocalObjectStorage>,
+    /// Python Runtime 客户端（M11）：pdf/docx 解析走 runtime
+    runtime: Option<aihub_runtime_client::RuntimeClient>,
     /// chunking 配置（§19.3）：KB retrieval_config 可覆盖
     default_target_tokens: i32,
 }
@@ -80,11 +82,13 @@ impl KnowledgeService {
         repos: Repos,
         registry: Arc<ProviderRegistry>,
         storage: Arc<LocalObjectStorage>,
+        runtime: Option<aihub_runtime_client::RuntimeClient>,
     ) -> Self {
         Self {
             repos,
             registry,
             storage,
+            runtime,
             default_target_tokens: 700,
         }
     }
@@ -187,18 +191,26 @@ impl KnowledgeService {
                 format!("identical file already indexed as {}", existing.filename),
             ));
         }
-        // 类型支持检查（§27.3 DOCUMENT_TYPE_UNSUPPORTED）
-        let supported = matches!(
+        // 类型支持（§27.3 DOCUMENT_TYPE_UNSUPPORTED）：文本内置；pdf/docx 经 Python Runtime（M11）
+        let lower = (filename.to_string() + " " + mime_type).to_lowercase();
+        let is_text = matches!(
             mime_type,
             "text/plain" | "text/markdown" | "text/csv" | "application/json"
         ) || filename.ends_with(".txt")
             || filename.ends_with(".md")
             || filename.ends_with(".csv")
             || filename.ends_with(".json");
-        if !supported {
+        let is_binary_doc = lower.contains("pdf") || lower.contains("docx");
+        if !is_text && !is_binary_doc {
             return Err(DomainError::validation(
                 DomainResource::Document,
-                format!("unsupported document type '{mime_type}'; V1 supports txt/md/csv/json (pdf/docx via runtime)"),
+                format!("unsupported document type '{mime_type}'"),
+            ));
+        }
+        if is_binary_doc && self.runtime.is_none() {
+            return Err(DomainError::validation(
+                DomainResource::Document,
+                format!("'{mime_type}' requires the Python runtime (enable [runtime] enabled = true)"),
             ));
         }
 
@@ -230,13 +242,13 @@ impl KnowledgeService {
         )
         .await;
 
-        // 解析（V1 纯文本；PDF/DOCX 由 runtime 承担 → M11 接入后走 parse 端点）
+        // 解析（§19.2）：文本内置；pdf/docx 走 Python Runtime parse（保留页码定位）
         self.repos
             .knowledge
             .set_document_status(&doc.id, "parsing", "pending", None)
             .await?;
-        let text = match self.storage.get(&storage_key) {
-            Ok(bytes) => String::from_utf8_lossy(&bytes).to_string(),
+        let raw_bytes = match self.storage.get(&storage_key) {
+            Ok(bytes) => bytes,
             Err(e) => {
                 self.repos
                     .knowledge
@@ -248,8 +260,40 @@ impl KnowledgeService {
                 ));
             }
         };
+        let (_text, page_texts): (String, Vec<(i32, String)>) = if is_binary_doc {
+            let client = self.runtime.as_ref().expect("runtime required for pdf/docx");
+            match client.parse_document(filename, mime_type, raw_bytes).await {
+                Ok(parsed) => (
+                    parsed.text,
+                    parsed
+                        .pages
+                        .iter()
+                        .map(|p| (p.page, p.text.clone()))
+                        .collect(),
+                ),
+                Err(e) => {
+                    self.repos
+                        .knowledge
+                        .set_document_status(
+                            &doc.id,
+                            "parse_failed",
+                            "pending",
+                            Some(e.clone()),
+                        )
+                        .await?;
+                    return Err(DomainError::internal(
+                        DomainResource::Document,
+                        format!("runtime parse failed: {e}"),
+                    ));
+                }
+            }
+        } else {
+            let text = String::from_utf8_lossy(&raw_bytes).to_string();
+            let page = text.clone();
+            (text, vec![(1, page)])
+        };
 
-        // Chunk（§19.3）：段落感知 + 目标 token 聚合
+        // Chunk（§19.3）：段落感知 + 目标 token 聚合；pdf/docx 保留页码
         self.repos
             .knowledge
             .set_document_status(&doc.id, "chunking", "pending", None)
@@ -259,7 +303,18 @@ impl KnowledgeService {
             .get("targetTokens")
             .and_then(|v| v.as_i64())
             .unwrap_or(self.default_target_tokens as i64) as usize;
-        let chunks = chunk_text(&text, target_tokens.max(100), 0);
+        let mut chunks: Vec<NewChunk> = Vec::new();
+        for (page_no, page_text) in &page_texts {
+            for piece in chunk_text(page_text, target_tokens.max(100), 0) {
+                chunks.push(NewChunk {
+                    chunk_index: chunks.len() as i32,
+                    content: piece.clone(),
+                    page_no: if *page_no > 1 { Some(*page_no) } else { None },
+                    section_path: None,
+                    token_count: Some((piece.len() / 4) as i32),
+                });
+            }
+        }
         if chunks.is_empty() {
             self.repos
                 .knowledge
@@ -275,23 +330,8 @@ impl KnowledgeService {
                 "document is empty",
             ));
         }
-        self.repos
-            .knowledge
-            .replace_chunks(
-                &doc.id,
-                chunks
-                    .iter()
-                    .enumerate()
-                    .map(|(i, c)| NewChunk {
-                        chunk_index: i as i32,
-                        content: c.clone(),
-                        page_no: None,
-                        section_path: None,
-                        token_count: Some((c.len() / 4) as i32),
-                    })
-                    .collect(),
-            )
-            .await?;
+        let chunk_count = chunks.len();
+        self.repos.knowledge.replace_chunks(&doc.id, chunks).await?;
 
         // Embedding（§19.1）
         self.repos
@@ -304,7 +344,7 @@ impl KnowledgeService {
                     .knowledge
                     .set_document_status(&doc.id, "ready", "ready", None)
                     .await?;
-                self.audit("document.indexed", &doc.id, json!({"chunks": chunks.len()}))
+                self.audit("document.indexed", &doc.id, json!({"chunks": chunk_count}))
                     .await;
             }
             Err(e) => {

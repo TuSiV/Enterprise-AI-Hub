@@ -212,6 +212,12 @@ impl Config {
             self.runtime.url = Some(v);
             self.runtime.enabled = true;
         }
+        if let Ok(v) = std::env::var("AIHUB_RUNTIME_ENABLED") {
+            self.runtime.enabled = v == "true" || v == "1";
+        }
+        if let Ok(v) = std::env::var("AIHUB_RUNTIME_MODE") {
+            self.runtime.mode = v;
+        }
         if let Ok(v) = std::env::var("AIHUB_LOG_LEVEL") {
             self.telemetry.log_level = v;
         }

@@ -11,6 +11,7 @@ members = [
     "crates/persistence",
     "crates/application",
     "crates/gateway",
+    "crates/runtime-client",
     "apps/server",
     "apps/mock-openai",
     "apps/desktop/src-tauri",
@@ -32,6 +33,7 @@ aihub-provider-openai-compatible = { path = "crates/provider-openai-compatible" 
 aihub-persistence = { path = "crates/persistence" }
 aihub-application = { path = "crates/application" }
 aihub-gateway = { path = "crates/gateway" }
+aihub-runtime-client = { path = "crates/runtime-client" }
 aihub-server = { path = "apps/server" }
 
 tokio = { version = "1", features = ["full"] }

@@ -194,6 +194,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/admin/security/dlp/scan", post(dlp_scan))
         .route("/v1/admin/users", get(users_list).post(users_create))
         .route("/v1/auth/login", post(auth_login))
+        .route("/v1/admin/runtime/status", get(runtime_status))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin_auth,
@@ -1864,4 +1865,20 @@ async fn auth_login(
         )),
         Err(e) => Err(domain_error_response(&e)),
     }
+}
+
+// ================= M11 Runtime 状态 =================
+
+async fn runtime_status(State(state): State<AppState>) -> Json<serde_json::Value> {
+    let runtime_state = state.runtime.state().await;
+    let (status, endpoint, reason) = match runtime_state {
+        aihub_runtime_client::RuntimeState::Disabled => ("disabled", None, None),
+        aihub_runtime_client::RuntimeState::Starting => ("starting", None, None),
+        aihub_runtime_client::RuntimeState::Running { endpoint } => ("running", Some(endpoint), None),
+        aihub_runtime_client::RuntimeState::Failed { reason } => ("failed", None, Some(reason)),
+    };
+    Json(json!({
+        "data": {"status": status, "endpoint": endpoint, "error": reason},
+        "meta": {}
+    }))
 }

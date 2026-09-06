@@ -11,11 +11,31 @@ import logging
 import sys
 from typing import Optional
 
+import base64
+
 from fastapi import FastAPI, Header, HTTPException
 
 RUNTIME_VERSION = "0.1.0"
 PROTOCOL_VERSION = "1"
-CAPABILITIES = []  # parse / embedding / rerank / agent 按 M12+ 逐步启用
+CAPABILITIES = ["parse.txt", "parse.md", "parse.csv", "parse.json"]
+
+
+def _optional_parse_capabilities() -> None:
+    try:
+        import pypdf  # noqa: F401
+
+        CAPABILITIES.append("parse.pdf")
+    except Exception:
+        pass
+    try:
+        import docx  # type: ignore  # noqa: F401
+
+        CAPABILITIES.append("parse.docx")
+    except Exception:
+        pass
+
+
+_optional_parse_capabilities()
 
 app = FastAPI(title="aihub-runtime", version=RUNTIME_VERSION)
 _session_token: str | None = None
@@ -42,6 +62,23 @@ def health(x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
 def task_types(x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
     _auth(x_aih_session_token)
     return {"data": CAPABILITIES}
+
+
+@app.post("/internal/v1/parse")
+def parse(body: dict, x_aih_session_token: Optional[str] = Header(default=None)) -> dict:
+    _auth(x_aih_session_token)
+    filename = body.get("filename", "document.txt")
+    mime = body.get("mimeType", "text/plain")
+    data = base64.b64decode(body.get("contentBase64", ""))
+    lower = (filename + " " + mime).lower()
+    if "pdf" in lower:
+        text, pages = _parse_pdf(data)
+    elif "docx" in lower:
+        text, pages = _parse_docx(data)
+    else:
+        text = data.decode("utf-8", errors="replace")
+        pages = [{"page": 1, "text": text}]
+    return {"text": text, "pages": pages}
 
 
 def main() -> None:
@@ -74,3 +111,30 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+def _parse_pdf(data: bytes) -> tuple[str, list]:
+    try:
+        import io
+
+        import pypdf
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=415, detail="pdf support requires the 'pypdf' package") from exc
+    reader = pypdf.PdfReader(io.BytesIO(data))
+    pages = []
+    for i, page in enumerate(reader.pages):
+        text = page.extract_text() or ""
+        pages.append({"page": i + 1, "text": text})
+    return "\n\n".join(p["text"] for p in pages), pages
+
+
+def _parse_docx(data: bytes) -> tuple[str, list]:
+    try:
+        import io
+
+        import docx
+    except Exception as exc:  # pragma: no cover
+        raise HTTPException(status_code=415, detail="docx support requires the 'python-docx' package") from exc
+    document = docx.Document(io.BytesIO(data))
+    paragraphs = [p.text for p in document.paragraphs if p.text.strip()]
+    return "\n\n".join(paragraphs), [{"page": 1, "text": "\n".join(paragraphs)}]

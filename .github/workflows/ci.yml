@@ -11,6 +11,19 @@ env:
 jobs:
   rust:
     runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: aihub_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -21,8 +34,12 @@ jobs:
         run: cargo fmt --check
       - name: Clippy
         run: cargo clippy --workspace --all-targets -- -D warnings
-      - name: Test
+      - name: Test (SQLite contract + gateway/platform e2e)
         run: cargo test --workspace
+      - name: Test (PostgreSQL contract)
+        env:
+          TEST_DATABASE_URL: postgres://postgres:postgres@localhost:5432/aihub_test
+        run: cargo test -p aihub-persistence --test pg_contract -- --ignored
 
   web:
     runs-on: ubuntu-latest
