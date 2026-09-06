@@ -37,6 +37,7 @@ fn kb_from_row(row: &sqlx::sqlite::SqliteRow) -> KnowledgeBase {
         owner_department_id: row.get("owner_department_id"),
         retrieval_config: parse_json(Some(row.get("retrieval_config_json"))),
         embedding_model_id: row.get("embedding_model_id"),
+        rerank_model_id: row.get("rerank_model_id"),
         status: row.get("status"),
         created_at: parse_ts(Some(row.get("created_at"))).unwrap_or_default(),
         updated_at: parse_ts(Some(row.get("updated_at"))).unwrap_or_default(),

@@ -210,7 +210,9 @@ impl KnowledgeService {
         if is_binary_doc && self.runtime.is_none() {
             return Err(DomainError::validation(
                 DomainResource::Document,
-                format!("'{mime_type}' requires the Python runtime (enable [runtime] enabled = true)"),
+                format!(
+                    "'{mime_type}' requires the Python runtime (enable [runtime] enabled = true)"
+                ),
             ));
         }
 
@@ -261,7 +263,10 @@ impl KnowledgeService {
             }
         };
         let (_text, page_texts): (String, Vec<(i32, String)>) = if is_binary_doc {
-            let client = self.runtime.as_ref().expect("runtime required for pdf/docx");
+            let client = self
+                .runtime
+                .as_ref()
+                .expect("runtime required for pdf/docx");
             match client.parse_document(filename, mime_type, raw_bytes).await {
                 Ok(parsed) => (
                     parsed.text,
@@ -274,12 +279,7 @@ impl KnowledgeService {
                 Err(e) => {
                     self.repos
                         .knowledge
-                        .set_document_status(
-                            &doc.id,
-                            "parse_failed",
-                            "pending",
-                            Some(e.clone()),
-                        )
+                        .set_document_status(&doc.id, "parse_failed", "pending", Some(e.clone()))
                         .await?;
                     return Err(DomainError::internal(
                         DomainResource::Document,
@@ -479,6 +479,8 @@ impl KnowledgeService {
             DomainError::internal(DomainResource::Document, "empty query embedding")
         })?;
 
+        // 混合检索（§19.4）：向量余弦 + 关键词覆盖率加权融合（0.7 / 0.3）
+        let terms = tokenize(query);
         let mut hits: Vec<RetrievalHit> = Vec::new();
         for doc in self.repos.knowledge.list_documents(&kb.id).await? {
             if doc.parse_status != "ready" {
@@ -488,13 +490,14 @@ impl KnowledgeService {
                 let Some(vector) = chunk.embedding else {
                     continue;
                 };
-                let score = cosine_similarity(&query_vector, &vector);
+                let vector_score = cosine_similarity(&query_vector, &vector);
+                let keyword_score = keyword_coverage(&terms, &chunk.content);
                 hits.push(RetrievalHit {
                     chunk_id: chunk.id,
                     document_id: doc.id.clone(),
                     knowledge_base_id: kb.id.clone(),
-                    score,
-                    content: chunk.content,
+                    score: 0.7 * vector_score + 0.3 * keyword_score,
+                    content: chunk.content.clone(),
                     filename: doc.filename.clone(),
                     page: chunk.page_no,
                     section: chunk.section_path,
@@ -506,6 +509,9 @@ impl KnowledgeService {
                 .partial_cmp(&a.score)
                 .unwrap_or(std::cmp::Ordering::Equal)
         });
+        // Rerank（§19.4）：绑定 rerank 模型时先扩候选，由 provider 适配能力决定是否重排；
+        // 当前 adapter 无标准 rerank 端点，保持融合排序（标注于 KB.rerank_model_id 预留）。
+        let _ = &kb.rerank_model_id;
         hits.truncate(top_k.max(1));
 
         let context = hits
@@ -674,4 +680,38 @@ mod tests {
         assert!((cosine_similarity(&[1.0, 0.0], &[0.0, 1.0])).abs() < 1e-9);
         assert_eq!(cosine_similarity(&[], &[]), 0.0);
     }
+
+    #[test]
+    fn hybrid_fusion_prefers_keyword_matches() {
+        let terms = tokenize("北京 办公室");
+        assert_eq!(terms.len(), 2);
+        assert!(
+            keyword_coverage(&terms, "北京办公室管理制度")
+                > keyword_coverage(&terms, "上海办事处地址")
+        );
+        assert_eq!(keyword_coverage(&[], "北京"), 0.0);
+    }
+}
+
+/// 关键词分词：按非字母数字切分（V1 简化 BM25 的覆盖率代理）。
+pub fn tokenize(query: &str) -> Vec<String> {
+    let normalized: String = query
+        .chars()
+        .map(|c| if c.is_alphanumeric() { c } else { ' ' })
+        .collect();
+    normalized
+        .split_whitespace()
+        .map(|s| s.to_lowercase())
+        .filter(|s| !s.is_empty())
+        .collect()
+}
+
+/// 关键词覆盖率：命中 term 比例。
+pub fn keyword_coverage(terms: &[String], content: &str) -> f64 {
+    if terms.is_empty() {
+        return 0.0;
+    }
+    let lower = content.to_lowercase();
+    let hit = terms.iter().filter(|t| lower.contains(t.as_str())).count();
+    hit as f64 / terms.len() as f64
 }

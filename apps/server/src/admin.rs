@@ -1874,7 +1874,9 @@ async fn runtime_status(State(state): State<AppState>) -> Json<serde_json::Value
     let (status, endpoint, reason) = match runtime_state {
         aihub_runtime_client::RuntimeState::Disabled => ("disabled", None, None),
         aihub_runtime_client::RuntimeState::Starting => ("starting", None, None),
-        aihub_runtime_client::RuntimeState::Running { endpoint } => ("running", Some(endpoint), None),
+        aihub_runtime_client::RuntimeState::Running { endpoint } => {
+            ("running", Some(endpoint), None)
+        }
         aihub_runtime_client::RuntimeState::Failed { reason } => ("failed", None, Some(reason)),
     };
     Json(json!({

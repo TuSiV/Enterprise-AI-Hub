@@ -57,7 +57,8 @@ fn provider_from_row(row: &sqlx::postgres::PgRow) -> Provider {
         id: row.get("id"),
         key: row.get("key"),
         name: row.get("name"),
-        kind: ProviderKind::parse(&row.get::<String, _>("kind")).unwrap_or(ProviderKind::OpenAICompatible),
+        kind: ProviderKind::parse(&row.get::<String, _>("kind"))
+            .unwrap_or(ProviderKind::OpenAICompatible),
         base_url: row.get("base_url"),
         credential_ref: row.get("credential_ref"),
         credential_configured: row.get("credential_configured"),
@@ -92,7 +93,9 @@ impl ProviderRepository for PgProviderRepository {
     async fn get(&self, id: &str) -> Result<Provider> {
         let row = sqlx::query("SELECT * FROM providers WHERE id = $1")
             .bind(id)
-            .fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Provider, e))?
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Provider, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::Provider, id))?;
         Ok(provider_from_row(&row))
     }
@@ -100,7 +103,9 @@ impl ProviderRepository for PgProviderRepository {
     async fn get_by_key(&self, key: &str) -> Result<Provider> {
         let row = sqlx::query("SELECT * FROM providers WHERE key = $1")
             .bind(key)
-            .fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Provider, e))?
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Provider, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::Provider, key))?;
         Ok(provider_from_row(&row))
     }
@@ -111,7 +116,10 @@ impl ProviderRepository for PgProviderRepository {
         } else {
             "SELECT * FROM providers ORDER BY created_at"
         };
-        let rows = sqlx::query(sql).fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::Provider, e))?;
+        let rows = sqlx::query(sql)
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Provider, e))?;
         Ok(rows.iter().map(provider_from_row).collect())
     }
 
@@ -136,14 +144,24 @@ impl ProviderRepository for PgProviderRepository {
 
     async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM providers WHERE id = $1")
-            .bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::Provider, e))?;
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Provider, e))?;
         Ok(())
     }
 
     async fn set_health(&self, id: &str, health: &str, checked_at: DateTime<Utc>) -> Result<()> {
-        sqlx::query("UPDATE providers SET health=$1, last_health_check_at=$2, updated_at=$3 WHERE id=$4")
-            .bind(health).bind(ts(checked_at)).bind(ts(Utc::now())).bind(id)
-            .execute(&self.pool).await.map_err(|e| db_error(DomainResource::Provider, e))?;
+        sqlx::query(
+            "UPDATE providers SET health=$1, last_health_check_at=$2, updated_at=$3 WHERE id=$4",
+        )
+        .bind(health)
+        .bind(ts(checked_at))
+        .bind(ts(Utc::now()))
+        .bind(id)
+        .execute(&self.pool)
+        .await
+        .map_err(|e| db_error(DomainResource::Provider, e))?;
         Ok(())
     }
 }
@@ -207,7 +225,8 @@ fn model_from_row(row: &sqlx::postgres::PgRow) -> Model {
         provider_id: row.get("provider_id"),
         model_key: row.get("model_key"),
         display_name: row.get("display_name"),
-        model_type: ModelType::parse(&row.get::<String, _>("model_type")).unwrap_or(ModelType::Chat),
+        model_type: ModelType::parse(&row.get::<String, _>("model_type"))
+            .unwrap_or(ModelType::Chat),
         context_window: row.get("context_window"),
         max_output_tokens: row.get("max_output_tokens"),
         capabilities: row.get::<Value, _>("capabilities_json"),
@@ -242,13 +261,23 @@ impl ModelRepository for PgModelRepository {
         match self.create(m.clone()).await {
             Ok(model) => Ok(model),
             Err(_) => {
-                let row = sqlx::query("SELECT id FROM models WHERE provider_id = $1 AND model_key = $2")
-                    .bind(&m.provider_id).bind(&m.model_key)
-                    .fetch_one(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+                let row =
+                    sqlx::query("SELECT id FROM models WHERE provider_id = $1 AND model_key = $2")
+                        .bind(&m.provider_id)
+                        .bind(&m.model_key)
+                        .fetch_one(&self.pool)
+                        .await
+                        .map_err(|e| db_error(DomainResource::Model, e))?;
                 let id: String = row.get("id");
-                sqlx::query("UPDATE models SET model_type=$1, discovered=TRUE, updated_at=$2 WHERE id=$3")
-                    .bind(m.model_type.as_str()).bind(ts(Utc::now())).bind(&id)
-                    .execute(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+                sqlx::query(
+                    "UPDATE models SET model_type=$1, discovered=TRUE, updated_at=$2 WHERE id=$3",
+                )
+                .bind(m.model_type.as_str())
+                .bind(ts(Utc::now()))
+                .bind(&id)
+                .execute(&self.pool)
+                .await
+                .map_err(|e| db_error(DomainResource::Model, e))?;
                 self.get(&id).await
             }
         }
@@ -257,7 +286,9 @@ impl ModelRepository for PgModelRepository {
     async fn get(&self, id: &str) -> Result<Model> {
         let row = sqlx::query("SELECT * FROM models WHERE id = $1")
             .bind(id)
-            .fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Model, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::Model, id))?;
         Ok(model_from_row(&row))
     }
@@ -290,7 +321,10 @@ impl ModelRepository for PgModelRepository {
         if f.enabled.is_some() {
             q = q.bind(f.enabled);
         }
-        let rows = q.fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+        let rows = q
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Model, e))?;
         Ok(rows.iter().map(model_from_row).collect())
     }
 
@@ -317,19 +351,27 @@ impl ModelRepository for PgModelRepository {
 
     async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM models WHERE id = $1")
-            .bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Model, e))?;
         Ok(())
     }
 
     async fn count_by_provider(&self, provider_id: &str) -> Result<i64> {
         let row = sqlx::query("SELECT COUNT(*) AS c FROM models WHERE provider_id = $1")
-            .bind(provider_id).fetch_one(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+            .bind(provider_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Model, e))?;
         Ok(row.get::<i64, _>("c"))
     }
 
     async fn count_enabled(&self) -> Result<i64> {
         let row = sqlx::query("SELECT COUNT(*) AS c FROM models WHERE enabled = TRUE")
-            .fetch_one(&self.pool).await.map_err(|e| db_error(DomainResource::Model, e))?;
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Model, e))?;
         Ok(row.get::<i64, _>("c"))
     }
 }
@@ -390,21 +432,29 @@ impl VirtualModelRepository for PgVirtualModelRepository {
 
     async fn get(&self, id: &str) -> Result<VirtualModel> {
         let row = sqlx::query("SELECT * FROM virtual_models WHERE id = $1")
-            .bind(id).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::VirtualModel, id))?;
         Ok(vm_from_row(&row))
     }
 
     async fn get_by_key(&self, key: &str) -> Result<VirtualModel> {
         let row = sqlx::query("SELECT * FROM virtual_models WHERE key = $1")
-            .bind(key).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::VirtualModel, key))?;
         Ok(vm_from_row(&row))
     }
 
     async fn list(&self) -> Result<Vec<VirtualModel>> {
         let rows = sqlx::query("SELECT * FROM virtual_models ORDER BY created_at")
-            .fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?;
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?;
         Ok(rows.iter().map(vm_from_row).collect())
     }
 
@@ -424,13 +474,23 @@ impl VirtualModelRepository for PgVirtualModelRepository {
 
     async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM virtual_models WHERE id = $1")
-            .bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?;
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?;
         Ok(())
     }
 
-    async fn replace_targets(&self, vm_id: &str, targets: Vec<NewTarget>) -> Result<Vec<VirtualModelTarget>> {
+    async fn replace_targets(
+        &self,
+        vm_id: &str,
+        targets: Vec<NewTarget>,
+    ) -> Result<Vec<VirtualModelTarget>> {
         sqlx::query("DELETE FROM virtual_model_targets WHERE virtual_model_id = $1")
-            .bind(vm_id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?;
+            .bind(vm_id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?;
         for t in targets {
             sqlx::query("INSERT INTO virtual_model_targets (id, virtual_model_id, model_id, priority, weight, enabled, condition_json, overrides_json) VALUES ($1,$2,$3,$4,$5,$6,$7,$8) ON CONFLICT (virtual_model_id, model_id) DO UPDATE SET priority=EXCLUDED.priority, weight=EXCLUDED.weight, enabled=EXCLUDED.enabled")
                 .bind(uuid::Uuid::new_v4().to_string()).bind(vm_id).bind(&t.model_id)
@@ -442,14 +502,21 @@ impl VirtualModelRepository for PgVirtualModelRepository {
     }
 
     async fn targets_for(&self, vm_id: &str) -> Result<Vec<VirtualModelTarget>> {
-        let rows = sqlx::query("SELECT * FROM virtual_model_targets WHERE virtual_model_id = $1 ORDER BY priority")
-            .bind(vm_id).fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?;
+        let rows = sqlx::query(
+            "SELECT * FROM virtual_model_targets WHERE virtual_model_id = $1 ORDER BY priority",
+        )
+        .bind(vm_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| db_error(DomainResource::VirtualModel, e))?;
         Ok(rows.iter().map(target_from_row).collect())
     }
 
     async fn list_all_targets(&self) -> Result<Vec<VirtualModelTarget>> {
         let rows = sqlx::query("SELECT * FROM virtual_model_targets ORDER BY priority")
-            .fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::VirtualModel, e))?;
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::VirtualModel, e))?;
         Ok(rows.iter().map(target_from_row).collect())
     }
 }
@@ -475,7 +542,11 @@ fn app_from_row(row: &sqlx::postgres::PgRow) -> Application {
         allowed_virtual_models: row
             .get::<Value, _>("allowed_virtual_models_json")
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default(),
         allow_direct_models: row.get("allow_direct_models"),
         monthly_budget_microunits: row.get("monthly_budget_microunits"),
@@ -501,21 +572,29 @@ impl ApplicationRepository for PgApplicationRepository {
 
     async fn get(&self, id: &str) -> Result<Application> {
         let row = sqlx::query("SELECT * FROM applications WHERE id = $1")
-            .bind(id).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Application, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::Application, id))?;
         Ok(app_from_row(&row))
     }
 
     async fn get_by_key(&self, key: &str) -> Result<Application> {
         let row = sqlx::query("SELECT * FROM applications WHERE key = $1")
-            .bind(key).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?
+            .bind(key)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Application, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::Application, key))?;
         Ok(app_from_row(&row))
     }
 
     async fn list(&self) -> Result<Vec<Application>> {
         let rows = sqlx::query("SELECT * FROM applications ORDER BY created_at")
-            .fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?;
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Application, e))?;
         Ok(rows.iter().map(app_from_row).collect())
     }
 
@@ -536,7 +615,10 @@ impl ApplicationRepository for PgApplicationRepository {
 
     async fn delete(&self, id: &str) -> Result<()> {
         sqlx::query("DELETE FROM applications WHERE id = $1")
-            .bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?;
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Application, e))?;
         Ok(())
     }
 }
@@ -561,7 +643,11 @@ fn key_from_row(row: &sqlx::postgres::PgRow) -> ApiKey {
         scopes: row
             .get::<Value, _>("scopes_json")
             .as_array()
-            .map(|a| a.iter().filter_map(|v| v.as_str().map(String::from)).collect())
+            .map(|a| {
+                a.iter()
+                    .filter_map(|v| v.as_str().map(String::from))
+                    .collect()
+            })
             .unwrap_or_default(),
         expires_at: row.get("expires_at"),
         last_used_at: row.get("last_used_at"),
@@ -585,38 +671,62 @@ impl ApiKeyRepository for PgApiKeyRepository {
 
     async fn get(&self, id: &str) -> Result<ApiKey> {
         let row = sqlx::query("SELECT * FROM api_keys WHERE id = $1")
-            .bind(id).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?
+            .bind(id)
+            .fetch_optional(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::ApiKey, e))?
             .ok_or_else(|| DomainError::not_found(DomainResource::ApiKey, id))?;
         Ok(key_from_row(&row))
     }
 
     async fn get_by_prefix(&self, prefix: &str) -> Result<Option<ApiKey>> {
-        Ok(sqlx::query("SELECT * FROM api_keys WHERE prefix = $1 AND revoked_at IS NULL")
-            .bind(prefix).fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?
-            .map(|r| key_from_row(&r)))
+        Ok(
+            sqlx::query("SELECT * FROM api_keys WHERE prefix = $1 AND revoked_at IS NULL")
+                .bind(prefix)
+                .fetch_optional(&self.pool)
+                .await
+                .map_err(|e| db_error(DomainResource::ApiKey, e))?
+                .map(|r| key_from_row(&r)),
+        )
     }
 
     async fn list_by_application(&self, application_id: &str) -> Result<Vec<ApiKey>> {
-        let rows = sqlx::query("SELECT * FROM api_keys WHERE application_id = $1 ORDER BY created_at DESC")
-            .bind(application_id).fetch_all(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?;
+        let rows = sqlx::query(
+            "SELECT * FROM api_keys WHERE application_id = $1 ORDER BY created_at DESC",
+        )
+        .bind(application_id)
+        .fetch_all(&self.pool)
+        .await
+        .map_err(|e| db_error(DomainResource::ApiKey, e))?;
         Ok(rows.iter().map(key_from_row).collect())
     }
 
     async fn revoke(&self, id: &str, at: DateTime<Utc>) -> Result<()> {
         sqlx::query("UPDATE api_keys SET revoked_at = $1 WHERE id = $2")
-            .bind(ts(at)).bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?;
+            .bind(ts(at))
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::ApiKey, e))?;
         Ok(())
     }
 
     async fn touch_last_used(&self, id: &str, at: DateTime<Utc>) -> Result<()> {
         sqlx::query("UPDATE api_keys SET last_used_at = $1 WHERE id = $2")
-            .bind(ts(at)).bind(id).execute(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?;
+            .bind(ts(at))
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::ApiKey, e))?;
         Ok(())
     }
 
     async fn count_by_application(&self, application_id: &str) -> Result<i64> {
         let row = sqlx::query("SELECT COUNT(*) AS c FROM api_keys WHERE application_id = $1")
-            .bind(application_id).fetch_one(&self.pool).await.map_err(|e| db_error(DomainResource::ApiKey, e))?;
+            .bind(application_id)
+            .fetch_one(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::ApiKey, e))?;
         Ok(row.get::<i64, _>("c"))
     }
 }
@@ -649,18 +759,30 @@ fn quota_from_row(row: &sqlx::postgres::PgRow) -> QuotaPolicy {
 
 #[async_trait]
 impl QuotaRepository for PgQuotaRepository {
-    async fn upsert_for_subject(&self, subject_type: &str, subject_id: &str, v: QuotaValues) -> Result<QuotaPolicy> {
+    async fn upsert_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+        v: QuotaValues,
+    ) -> Result<QuotaPolicy> {
         sqlx::query("INSERT INTO quota_policies (id, subject_type, subject_id, rpm, tpm, daily_requests, monthly_tokens, monthly_cost_microunits, exceed_action, enabled, created_at, updated_at) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,TRUE,$10,$10) ON CONFLICT (subject_type, subject_id) DO UPDATE SET rpm=EXCLUDED.rpm, tpm=EXCLUDED.tpm, daily_requests=EXCLUDED.daily_requests, monthly_tokens=EXCLUDED.monthly_tokens, monthly_cost_microunits=EXCLUDED.monthly_cost_microunits, exceed_action=EXCLUDED.exceed_action, updated_at=EXCLUDED.updated_at")
             .bind(uuid::Uuid::new_v4().to_string()).bind(subject_type).bind(subject_id)
             .bind(v.rpm).bind(v.tpm).bind(v.daily_requests)
             .bind(v.monthly_tokens).bind(v.monthly_cost_microunits)
             .bind(&v.exceed_action).bind(ts(Utc::now()))
             .execute(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?;
-        self.get_for_subject(subject_type, subject_id).await?
-            .ok_or_else(|| DomainError::internal(DomainResource::Application, "quota policy vanished"))
+        self.get_for_subject(subject_type, subject_id)
+            .await?
+            .ok_or_else(|| {
+                DomainError::internal(DomainResource::Application, "quota policy vanished")
+            })
     }
 
-    async fn get_for_subject(&self, subject_type: &str, subject_id: &str) -> Result<Option<QuotaPolicy>> {
+    async fn get_for_subject(
+        &self,
+        subject_type: &str,
+        subject_id: &str,
+    ) -> Result<Option<QuotaPolicy>> {
         Ok(sqlx::query("SELECT * FROM quota_policies WHERE subject_type = $1 AND subject_id = $2 AND enabled = TRUE")
             .bind(subject_type).bind(subject_id)
             .fetch_optional(&self.pool).await.map_err(|e| db_error(DomainResource::Application, e))?

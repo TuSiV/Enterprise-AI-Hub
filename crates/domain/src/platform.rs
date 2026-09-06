@@ -24,6 +24,8 @@ pub struct KnowledgeBase {
     pub owner_department_id: Option<Id>,
     pub retrieval_config: Value,
     pub embedding_model_id: Option<Id>,
+    /// 预留：rerank 模型（§19.4 Rerank 阶段）
+    pub rerank_model_id: Option<Id>,
     pub status: String,
     pub created_at: DateTime<Utc>,
     pub updated_at: DateTime<Utc>,

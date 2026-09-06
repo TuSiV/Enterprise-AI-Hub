@@ -172,10 +172,11 @@ async fn run_one(supervisor: &RuntimeSupervisor) -> anyhow::Result<String> {
         let _ = child.kill().await;
         anyhow::bail!("runtime health check failed after handshake");
     }
-    supervisor.set_state(RuntimeState::Running {
-        endpoint: endpoint.clone(),
-    })
-    .await;
+    supervisor
+        .set_state(RuntimeState::Running {
+            endpoint: endpoint.clone(),
+        })
+        .await;
     tracing::info!(target: "aihub::runtime", %endpoint, "runtime sidecar ready");
 
     // 等待进程退出（托管期）
@@ -230,7 +231,12 @@ impl RuntimeClient {
         Ok(health)
     }
 
-    pub async fn parse_document(&self, filename: &str, mime_type: &str, bytes: Vec<u8>) -> Result<ParsedDocument, String> {
+    pub async fn parse_document(
+        &self,
+        filename: &str,
+        mime_type: &str,
+        bytes: Vec<u8>,
+    ) -> Result<ParsedDocument, String> {
         use base64::Engine;
         let payload = serde_json::json!({
             "filename": filename,
@@ -250,7 +256,10 @@ impl RuntimeClient {
             let body = response.text().await.unwrap_or_default();
             return Err(format!("runtime parse failed ({status}): {body}"));
         }
-        response.json::<ParsedDocument>().await.map_err(|e| e.to_string())
+        response
+            .json::<ParsedDocument>()
+            .await
+            .map_err(|e| e.to_string())
     }
 }
 

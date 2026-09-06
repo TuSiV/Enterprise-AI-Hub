@@ -4,11 +4,11 @@
 mod applications;
 mod audit;
 mod models;
-mod platform_store;
 #[cfg(feature = "postgres")]
 pub mod pg_core;
 #[cfg(feature = "postgres")]
 pub mod pg_platform;
+mod platform_store;
 mod prompt_iam;
 mod providers;
 mod requests;

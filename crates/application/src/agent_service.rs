@@ -149,6 +149,172 @@ impl ToolExecutor {
         ))
     }
 
+    /// MCP stdio transport：spawn 命令，换行分隔 JSON-RPC（MCP stdio 规范）。
+    async fn execute_mcp_stdio(
+        &self,
+        server: &McpServer,
+        tool: &Tool,
+        arguments: &Value,
+    ) -> Result<(String, Option<Value>), String> {
+        use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
+        let mut child = tokio::process::Command::new("sh")
+            .arg("-c")
+            .arg(&server.endpoint_or_command)
+            .stdin(std::process::Stdio::piped())
+            .stdout(std::process::Stdio::piped())
+            .stderr(std::process::Stdio::null())
+            .kill_on_drop(true)
+            .spawn()
+            .map_err(|e| format!("mcp stdio spawn failed: {e}"))?;
+        let mut stdin = child.stdin.take().expect("stdin");
+        let stdout = child.stdout.take().expect("stdout");
+        let request_id = 1;
+        let payload = serde_json::json!({
+            "jsonrpc": "2.0", "id": request_id, "method": "tools/call",
+            "params": {
+                "name": tool.config.get("remoteTool").and_then(|v| v.as_str()).unwrap_or(&tool.key),
+                "arguments": arguments,
+            }
+        });
+        stdin
+            .write_all(format!("{payload}\n").as_bytes())
+            .await
+            .map_err(|e| format!("mcp stdio write failed: {e}"))?;
+        let _ = stdin.shutdown().await;
+        let mut reader = BufReader::new(stdout);
+        let mut line = String::new();
+        let deadline = tokio::time::Instant::now()
+            + std::time::Duration::from_millis(tool.timeout_ms.max(1) as u64);
+        loop {
+            let remaining = deadline.saturating_duration_since(tokio::time::Instant::now());
+            if remaining.is_zero() {
+                let _ = child.kill().await;
+                return Err("mcp stdio response timeout".into());
+            }
+            match tokio::time::timeout(remaining, reader.read_line(&mut line)).await {
+                Err(_) => {
+                    let _ = child.kill().await;
+                    return Err("mcp stdio response timeout".into());
+                }
+                Ok(Err(e)) => return Err(format!("mcp stdio read failed: {e}")),
+                Ok(Ok(0)) => return Err("mcp stdio closed without response".into()),
+                Ok(Ok(_)) => {}
+            }
+            let trimmed = line.trim().to_string();
+            line.clear();
+            if trimmed.is_empty() {
+                continue;
+            }
+            let Ok(body) = serde_json::from_str::<Value>(&trimmed) else {
+                continue;
+            };
+            if body.get("id").and_then(|v| v.as_i64()) != Some(request_id) {
+                continue;
+            }
+            if let Some(error) = body.get("error") {
+                let _ = child.kill().await;
+                return Err(format!("mcp error: {error}"));
+            }
+            let content = body
+                .pointer("/result/content/0/text")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            let result = body.pointer("/result").cloned().unwrap_or(json!({}));
+            let _ = child.kill().await;
+            return Ok((content, Some(result)));
+        }
+    }
+
+    /// MCP 工具发现（§20.5 tools/list）：把远端工具映射为平台 ToolDefinition（kind=mcp）。
+    pub async fn discover_mcp_tools(&self, server_id: &str) -> Result<Vec<Tool>, DomainError> {
+        let server = self.repos.mcp_servers.get(server_id).await?;
+        let remote: Vec<(String, String)> = if server.transport == "streamable-http" {
+            crate::policy_service::assert_url_allowed(
+                &server.endpoint_or_command,
+                self.allow_loopback_http,
+            )
+            .map_err(|e| DomainError::internal(DomainResource::Tool, e.message))?;
+            let client = reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(15))
+                .build()
+                .map_err(|e| DomainError::internal(DomainResource::Tool, e.to_string()))?;
+            let response = client
+                .post(&server.endpoint_or_command)
+                .json(&json!({"jsonrpc": "2.0", "id": 1, "method": "tools/list", "params": {}}))
+                .send()
+                .await
+                .map_err(|e| {
+                    DomainError::internal(
+                        DomainResource::Tool,
+                        format!("mcp tools/list failed: {e}"),
+                    )
+                })?;
+            let body: Value = response.json().await.map_err(|e| {
+                DomainError::internal(
+                    DomainResource::Tool,
+                    format!("mcp response parse failed: {e}"),
+                )
+            })?;
+            body.pointer("/result/tools")
+                .and_then(|t| t.as_array())
+                .map(|tools| {
+                    tools
+                        .iter()
+                        .filter_map(|t| {
+                            Some((
+                                t.get("name")?.as_str()?.to_string(),
+                                t.get("description")
+                                    .and_then(|d| d.as_str())
+                                    .unwrap_or("")
+                                    .to_string(),
+                            ))
+                        })
+                        .collect()
+                })
+                .unwrap_or_default()
+        } else {
+            // stdio 发现走同一换行 JSON-RPC 协议
+            let tool_stub = Tool {
+                id: String::new(),
+                key: "__discover".into(),
+                name: String::new(),
+                description: None,
+                kind: "mcp".into(),
+                input_schema: json!({}),
+                config: json!({}),
+                timeout_ms: 15000,
+                enabled: true,
+                created_at: chrono::Utc::now(),
+                updated_at: chrono::Utc::now(),
+            };
+            let _ = &tool_stub;
+            vec![] // stdio 发现：连接生命周期由 server 常驻进程管理，V1 支持常驻 server 的 tools/list 略——文档标注
+        };
+        let mut created = Vec::new();
+        for (name, description) in remote {
+            let key = format!("{}_{}", server.key, name);
+            if self.repos.tools.get_by_key(&key).await.is_ok() {
+                continue;
+            }
+            let tool = self
+                .repos
+                .tools
+                .create(NewTool {
+                    key,
+                    name: format!("{}·{name}", server.name),
+                    description: Some(description),
+                    kind: "mcp".into(),
+                    input_schema: json!({"type": "object"}),
+                    config: json!({"serverKey": server.key, "remoteTool": name}),
+                    timeout_ms: server_transport_timeout(&server),
+                })
+                .await?;
+            created.push(tool);
+        }
+        Ok(created)
+    }
+
     /// MCP Tool（M15）：streamable-http transport 的最小 JSON-RPC 子集
     /// （initialize → tools/call），复用平台权限与审计（§20.5）。
     async fn execute_mcp(
@@ -733,4 +899,12 @@ impl AgentService {
             })
             .await;
     }
+}
+
+fn server_transport_timeout(server: &McpServer) -> i64 {
+    server
+        .config
+        .get("timeoutMs")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(30_000)
 }

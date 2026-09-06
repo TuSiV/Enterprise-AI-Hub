@@ -7,24 +7,53 @@
 
 use aihub_domain::cost::Pricing;
 use aihub_domain::entities::*;
-use aihub_domain::platform::UserRepository;
-use aihub_domain::repos::*;
 use aihub_domain::platform::NewUser;
+use aihub_domain::platform::UserRepository;
 use aihub_domain::prompt::PromptRepository;
-use aihub_domain::DomainErrorCode;
+use aihub_domain::repos::*;
 use aihub_domain::DomainError;
+use aihub_domain::DomainErrorCode;
 
 async fn pool() -> sqlx::PgPool {
-    let url = std::env::var("TEST_DATABASE_URL").expect("TEST_DATABASE_URL must be set for pg contract tests");
-    let pool = aihub_persistence::open_postgres(&url).await.expect("open postgres");
+    let url = std::env::var("TEST_DATABASE_URL")
+        .expect("TEST_DATABASE_URL must be set for pg contract tests");
+    let pool = aihub_persistence::open_postgres(&url)
+        .await
+        .expect("open postgres");
     // 清理既有数据，保证幂等
     for table in [
-        "agent_runs", "tool_calls", "eval_results", "eval_runs", "eval_cases", "eval_datasets",
-        "document_chunks", "documents", "knowledge_bases", "agent_versions", "agents",
-        "mcp_servers", "tools", "user_roles", "role_permissions", "permissions", "roles", "users",
-        "prompt_versions", "prompts", "security_policies", "routing_policies",
-        "usage_records", "cost_records", "ai_requests", "api_keys", "quota_policies",
-        "virtual_model_targets", "virtual_models", "models", "provider_health_samples", "providers",
+        "agent_runs",
+        "tool_calls",
+        "eval_results",
+        "eval_runs",
+        "eval_cases",
+        "eval_datasets",
+        "document_chunks",
+        "documents",
+        "knowledge_bases",
+        "agent_versions",
+        "agents",
+        "mcp_servers",
+        "tools",
+        "user_roles",
+        "role_permissions",
+        "permissions",
+        "roles",
+        "users",
+        "prompt_versions",
+        "prompts",
+        "security_policies",
+        "routing_policies",
+        "usage_records",
+        "cost_records",
+        "ai_requests",
+        "api_keys",
+        "quota_policies",
+        "virtual_model_targets",
+        "virtual_models",
+        "models",
+        "provider_health_samples",
+        "providers",
         "applications",
     ] {
         sqlx::query(&format!("DELETE FROM {table}"))
@@ -61,7 +90,10 @@ async fn pg_provider_model_vm_app_key_quota() {
         })
         .await
         .unwrap();
-    assert_eq!(providers.get(&provider.id).await.unwrap().config["a"], serde_json::json!(1));
+    assert_eq!(
+        providers.get(&provider.id).await.unwrap().config["a"],
+        serde_json::json!(1)
+    );
 
     let dup = providers
         .create(NewProvider {
@@ -77,7 +109,13 @@ async fn pg_provider_model_vm_app_key_quota() {
             config: serde_json::json!({}),
         })
         .await;
-    assert!(matches!(dup, Err(DomainError { code: DomainErrorCode::Duplicate, .. })));
+    assert!(matches!(
+        dup,
+        Err(DomainError {
+            code: DomainErrorCode::Duplicate,
+            ..
+        })
+    ));
 
     let model = models
         .create(NewModel {
@@ -99,7 +137,10 @@ async fn pg_provider_model_vm_app_key_quota() {
         })
         .await
         .unwrap();
-    assert_eq!(models.get(&model.id).await.unwrap().pricing.input, Some(1.5));
+    assert_eq!(
+        models.get(&model.id).await.unwrap().pricing.input,
+        Some(1.5)
+    );
 
     let vm = vms
         .create(
@@ -164,7 +205,12 @@ async fn pg_provider_model_vm_app_key_quota() {
         .await
         .unwrap();
     assert_eq!(
-        quotas.get_for_subject("application", &app.id).await.unwrap().unwrap().rpm,
+        quotas
+            .get_for_subject("application", &app.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .rpm,
         Some(30)
     );
 }
@@ -322,9 +368,19 @@ async fn pg_prompt_and_user() {
         .await
         .unwrap();
     assert_eq!(v1.version, 1);
-    let published = prompts.set_version_status(&v1.id, aihub_domain::prompt::PromptVersionStatus::Published).await.unwrap();
-    assert_eq!(published.status, aihub_domain::prompt::PromptVersionStatus::Published);
-    assert!(prompts.published_version(&prompt.id).await.unwrap().is_some());
+    let published = prompts
+        .set_version_status(&v1.id, aihub_domain::prompt::PromptVersionStatus::Published)
+        .await
+        .unwrap();
+    assert_eq!(
+        published.status,
+        aihub_domain::prompt::PromptVersionStatus::Published
+    );
+    assert!(prompts
+        .published_version(&prompt.id)
+        .await
+        .unwrap()
+        .is_some());
 
     let user = users
         .create(NewUser {
@@ -337,7 +393,10 @@ async fn pg_prompt_and_user() {
         })
         .await
         .unwrap();
-    users.ensure_role("pg_dev", "Dev", "dev", &["usage.read"]).await.unwrap();
+    users
+        .ensure_role("pg_dev", "Dev", "dev", &["usage.read"])
+        .await
+        .unwrap();
     users.assign_role(&user.id, "pg_dev").await.unwrap();
     assert_eq!(users.roles_of(&user.id).await.unwrap().len(), 1);
     assert!(users.get_by_username("pg-alice").await.unwrap().is_some());
