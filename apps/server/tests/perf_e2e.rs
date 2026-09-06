@@ -1,3 +1,17 @@
+// Copyright 2026 YONGZHE CHEN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! 性能/稳定性冒烟（§31.8）：并发非流式、并发流式、取消风暴（client cancellation storm）、
 //! 慢 Provider、429 突发。验收重点是 Gateway 自身开销与稳定性（§31.8 INFERRED）。
 

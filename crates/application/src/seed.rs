@@ -1,3 +1,17 @@
+// Copyright 2026 YONGZHE CHEN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! 启动种子数据（§16.3 预置 Virtual Model 模板 + 本地 Playground 应用）。
 //! 预置只是初始模板，管理员可随时重新映射（§16.3）。
 

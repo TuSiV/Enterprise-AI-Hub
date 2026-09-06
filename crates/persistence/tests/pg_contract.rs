@@ -1,3 +1,17 @@
+// Copyright 2026 YONGZHE CHEN
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//     http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
 //! PostgreSQL Repository Contract Test（M1/M10 验收：同一测试集在 SQLite/Postgres 通过）。
 //! 默认 #[ignore]：需要 TEST_DATABASE_URL（如 postgres://postgres:postgres@localhost/aihub_test）。
 //! CI 中由 postgres service 提供；本地 `docker run postgres` 后运行：
