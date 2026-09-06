@@ -30,7 +30,7 @@
       "endpoints": [
         "https://updates.example.com/aihub/{{target}}/{{current_version}}"
       ],
-      "pubkey": "REPLACE_WITH_RELEASE_PUBKEY (tauri signer generate -w ~/.tauri/aihub.key)",
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDlGRDYxNEE1QUM2MEU2RkQKUldUOTVtQ3NwUlRXbjJlVTBwWUZwZnRiZVk5d21HWUlUNnBOU1l0Ymd2MStXeXl4ZCthUzhxMVYK",
       "windows": {
         "installMode": "passive"
       }

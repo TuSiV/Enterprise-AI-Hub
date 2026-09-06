@@ -32,8 +32,9 @@
 
 | Runtime Jobs（M11） | ✅ | runtime_jobs 持久化队列（重试/退避/requeue）+ 后台 worker + 管理 API |
 | 对象存储（M10/M12） | ✅ | ObjectStorage Port：Local（默认）/ S3-compatible（SigV4 最小实现，兼容 MinIO） |
-| Identity Provider（M10） | ✅ | local / trusted_header（§11.3 显式开启）/ **OIDC RS256 id_token JWKS 验签**（iss/aud 校验 + 篡改拒绝，e2e 覆盖） |
-| 交付附件（§36.4） | ✅ | Dockerfile（多阶段：Rust+Web+Runtime）+ docker-compose（PostgreSQL+Server）；tauri updater 配置 + 发布签名流程文档（UPDATER.md）；Playwright web E2E spec（web/e2e） |
+| Identity Provider（M10） | ✅ | local / trusted_header（§11.3 显式开启）/ **OIDC RS256 id_token JWKS 验签**（iss/aud 校验 + 篡改拒绝 + `POST /api/v1/auth/oidc` 登录端点，e2e + mock IdP 全链路实测） |
+| 交付附件（§36.4） | ✅ | Dockerfile（多阶段：Rust+Web+Runtime）+ docker-compose（PostgreSQL+Server）；**Tauri 更新签名密钥已生成并实测 sign/verify 往返**（公钥入 conf，UPDATER.md）；Playwright web E2E spec（web/e2e） |
+| S3 联调（M10） | ✅ | SigV4 adapter 对**真实 MinIO** 集成测试通过（put/get/delete/exists roundtrip；`--features s3-test`） |
 | Connected Desktop（§25） | ✅ | 登录页支持 Server Workspace 地址切换，本地/远程统一 client |
 
 未实现（明确标注）：Anthropic/Gemini 专属 Adapter、OIDC token 校验（JWKS，需部署 IdP）、分布式限流（Stage F 按需）、Desktop 自动更新签名（需发布证书）。

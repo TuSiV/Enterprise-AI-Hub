@@ -118,6 +118,10 @@ pub struct AuthConfig {
     /// SecretStore 后端：keyring（默认，OS 钥匙串）| memory | env。
     /// 开发/CI 环境建议 memory，避免 macOS 钥匙串授权弹窗。
     pub secret_backend: Option<String>,
+    /// OIDC（§14.2）：三项齐备时启用 POST /api/v1/auth/oidc 登录。
+    pub oidc_jwks_url: Option<String>,
+    pub oidc_issuer: Option<String>,
+    pub oidc_audience: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -226,6 +230,15 @@ impl Config {
         }
         if let Ok(v) = std::env::var("AIHUB_SECRET_BACKEND") {
             self.auth.secret_backend = Some(v);
+        }
+        if let Ok(v) = std::env::var("AIHUB_OIDC_JWKS_URL") {
+            self.auth.oidc_jwks_url = Some(v);
+        }
+        if let Ok(v) = std::env::var("AIHUB_OIDC_ISSUER") {
+            self.auth.oidc_issuer = Some(v);
+        }
+        if let Ok(v) = std::env::var("AIHUB_OIDC_AUDIENCE") {
+            self.auth.oidc_audience = Some(v);
         }
         if let Ok(v) = std::env::var("AIHUB_DATA_DIR") {
             self.data_dir = Some(v);

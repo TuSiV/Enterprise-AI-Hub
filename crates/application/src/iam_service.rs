@@ -187,6 +187,16 @@ impl IamService {
         self.repos.users.get(&user_id).await.ok()
     }
 
+    /// 为已验证身份签发 session（OIDC 登录端点使用）。
+    pub async fn issue_session(&self, user: &User) -> String {
+        let token = format!("aih_session_{}", uuid::Uuid::new_v4().simple());
+        self.sessions
+            .lock()
+            .await
+            .insert(token.clone(), user.id.clone());
+        token
+    }
+
     pub async fn roles_of(&self, user_id: &str) -> Result<Vec<Role>, DomainError> {
         self.repos.users.roles_of(user_id).await
     }

@@ -21,6 +21,7 @@ async fn test_core(trusted_header: bool) -> aihub_server::Core {
             admin_token: None,
             trusted_header_user: trusted_header,
             secret_backend: Some("memory".into()),
+            ..Default::default()
         },
         ..Default::default()
     };

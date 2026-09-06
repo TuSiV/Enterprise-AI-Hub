@@ -1,0 +1,6 @@
+# Tauri updater 签名私钥（仅发布流水线持有）
+*.tauri.key
+aihub-tauri.key
+# Tauri updater 签名私钥（仅发布流水线持有）
+*.tauri.key
+aihub-tauri.key

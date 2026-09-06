@@ -194,6 +194,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/admin/security/dlp/scan", post(dlp_scan))
         .route("/v1/admin/users", get(users_list).post(users_create))
         .route("/v1/auth/login", post(auth_login))
+        .route("/v1/auth/oidc", post(auth_oidc))
         .route("/v1/admin/runtime/status", get(runtime_status))
         .route("/v1/admin/jobs", get(jobs_list))
         .route("/v1/admin/jobs/{id}/requeue", post(job_requeue))
@@ -1919,6 +1920,49 @@ async fn job_requeue(
 ) -> Result<Json<serde_json::Value>, Response> {
     match state.repos.jobs.requeue(&id).await {
         Ok(()) => Ok(Json(json!({ "data": {"requeued": true}, "meta": {} }))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+// ================= OIDC 登录（§14.2） =================
+
+#[derive(Deserialize, Default)]
+#[serde(default)]
+#[allow(non_snake_case)]
+struct OidcLoginBody {
+    idToken: Option<String>,
+}
+
+async fn auth_oidc(
+    State(state): State<AppState>,
+    Json(body): Json<OidcLoginBody>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let (Some(jwks), Some(issuer), Some(audience)) = (
+        state.config.auth.oidc_jwks_url.as_ref(),
+        state.config.auth.oidc_issuer.as_ref(),
+        state.config.auth.oidc_audience.as_ref(),
+    ) else {
+        return Err((
+            StatusCode::NOT_IMPLEMENTED,
+            Json(ApiErrorBody::new(
+                "AIH_FORBIDDEN",
+                "OIDC login is not configured (set AIHUB_OIDC_* env)",
+            )),
+        )
+            .into_response());
+    };
+    let id_token = body.idToken.unwrap_or_default();
+    match state
+        .iam
+        .identity_from_oidc(jwks, &id_token, issuer, audience)
+        .await
+    {
+        Ok(user) => {
+            let token = state.iam.issue_session(&user).await;
+            Ok(Json(
+                json!({ "data": {"token": token, "user": {"id": user.id, "username": user.username, "displayName": user.display_name}}, "meta": {} }),
+            ))
+        }
         Err(e) => Err(domain_error_response(&e)),
     }
 }
