@@ -129,7 +129,7 @@ OpenAI 兼容客户端 ───────────────────
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets -- -D warnings
-cargo test                                              # 41+ tests：domain 单元 / SQLite 契约 / Gateway+Platform e2e
+cargo test                                              # 61 tests：domain 单元 / SQLite 契约 / Provider Adapter 契约矩阵(§31.3) / Gateway+Platform e2e / RBAC / 并发与取消风暴(§31.8)
 TEST_DATABASE_URL=... cargo test -p aihub-persistence --test pg_contract -- --ignored   # PostgreSQL 契约（本机 PG 18 验证）
 cd web && npm run build                                 # tsc --noEmit + vite build
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
