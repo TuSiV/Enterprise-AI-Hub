@@ -10,7 +10,7 @@ use aihub_domain::entities::*;
 use aihub_domain::platform::UserRepository;
 use aihub_domain::repos::*;
 use aihub_domain::platform::NewUser;
-use aihub_domain::prompt::{NewPromptVersion, PromptRepository};
+use aihub_domain::prompt::PromptRepository;
 use aihub_domain::DomainErrorCode;
 use aihub_domain::DomainError;
 
