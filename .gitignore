@@ -13,3 +13,4 @@ __pycache__/
 # 运行时敏感文件：本地 Admin Token / 钥匙串降级缓存
 admin_token
 *.token
+docs/
