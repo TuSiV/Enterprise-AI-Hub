@@ -13,6 +13,11 @@
 // limitations under the License.
 
 //! Admin API（方案 §13.1/§13.3）：统一 {data, meta} / {error} 信封 + Admin Token 鉴权。
+//!
+//! handler 统一使用 `Result<Json, Response>` 承载 §13.3 错误信封；axum 的 Response 体
+//! 较大（>=128B），与 clippy::result_large_err 默认阈值冲突——错误构造已统一经
+//! domain_error_response / pipeline_error_response 辅助函数，此处豁免该 lint。
+#![allow(clippy::result_large_err)]
 
 use aihub_api_types::admin::*;
 use aihub_api_types::common::{ApiErrorBody, PageMeta, PageResponse};
