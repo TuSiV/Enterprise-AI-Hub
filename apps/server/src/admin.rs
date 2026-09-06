@@ -195,6 +195,8 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/admin/users", get(users_list).post(users_create))
         .route("/v1/auth/login", post(auth_login))
         .route("/v1/admin/runtime/status", get(runtime_status))
+        .route("/v1/admin/jobs", get(jobs_list))
+        .route("/v1/admin/jobs/{id}/requeue", post(job_requeue))
         .route_layer(axum::middleware::from_fn_with_state(
             state.clone(),
             admin_auth,
@@ -220,6 +222,23 @@ async fn admin_auth(
         .get("x-aih-admin-token")
         .and_then(|v| v.to_str().ok())
         .map(str::trim);
+    // Trusted upstream（§11.3）：反向代理注入的 X-AIH-User-ID，仅在配置显式开启时生效
+    if state.config.auth.trusted_header_user {
+        if let Some(user_id) = req
+            .headers()
+            .get("x-aih-user-id")
+            .and_then(|v| v.to_str().ok())
+        {
+            if state
+                .iam
+                .identity_from_trusted_header(user_id, user_id)
+                .await
+                .is_ok()
+            {
+                return next.run(req).await;
+            }
+        }
+    }
     let provided = from_bearer.or(from_header);
     // IAM session token（M10 RBAC）：aih_session_ 前缀走用户会话校验
     let session_ok = match provided {
@@ -1883,4 +1902,23 @@ async fn runtime_status(State(state): State<AppState>) -> Json<serde_json::Value
         "data": {"status": status, "endpoint": endpoint, "error": reason},
         "meta": {}
     }))
+}
+
+// ================= M11 Runtime Jobs =================
+
+async fn jobs_list(State(state): State<AppState>) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.jobs.list(50).await {
+        Ok(list) => Ok(Json(json!({ "data": list, "meta": {} }))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
+async fn job_requeue(
+    State(state): State<AppState>,
+    Path(id): Path<String>,
+) -> Result<Json<serde_json::Value>, Response> {
+    match state.repos.jobs.requeue(&id).await {
+        Ok(()) => Ok(Json(json!({ "data": {"requeued": true}, "meta": {} }))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
 }

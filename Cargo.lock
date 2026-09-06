@@ -40,6 +40,7 @@ dependencies = [
  "chrono",
  "futures",
  "hex",
+ "hmac",
  "rand 0.8.8",
  "reqwest 0.12.28",
  "serde",

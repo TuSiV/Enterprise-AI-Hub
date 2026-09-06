@@ -549,3 +549,33 @@ pub trait PolicyRepository: Send + Sync {
     ) -> Result<Vec<SecurityPolicy>>;
     async fn delete_security_policy(&self, id: &str) -> Result<()>;
 }
+
+// ================= M11 Runtime Jobs（附录 A.7） =================
+
+#[derive(Debug, Clone, Serialize)]
+pub struct RuntimeJob {
+    pub id: Id,
+    pub job_type: String,
+    pub status: String,
+    pub resource_type: Option<String>,
+    pub resource_id: Option<String>,
+    pub payload: Value,
+    pub attempt: i32,
+    pub max_attempts: i32,
+    pub last_error: Option<String>,
+}
+
+#[async_trait]
+pub trait JobRepository: Send + Sync {
+    async fn enqueue(
+        &self,
+        job_type: &str,
+        resource_type: Option<&str>,
+        resource_id: Option<&str>,
+        payload: &Value,
+    ) -> Result<Id>;
+    async fn claim_due(&self) -> Result<Option<RuntimeJob>>;
+    async fn finish(&self, id: &str, status: &str, error: Option<String>) -> Result<()>;
+    async fn list(&self, limit: u64) -> Result<Vec<RuntimeJob>>;
+    async fn requeue(&self, id: &str) -> Result<()>;
+}

@@ -150,6 +150,9 @@ async fn build_repos(config: &Config) -> anyhow::Result<Repos> {
             users: Arc::new(aihub_persistence::pg_platform::PgUserRepository::new(
                 pool.clone(),
             )),
+            jobs: Arc::new(aihub_persistence::SqliteJobRepository::new(
+                aihub_persistence::open_sqlite(&config.db_path()).await?,
+            )),
             // M12+ 平台域 V1 复用 SQLite 文件（server 模式存 data_dir），PG 版本随后续里程碑接入
             knowledge: Arc::new(aihub_persistence::SqliteKnowledgeRepository::new(
                 aihub_persistence::open_sqlite(&config.db_path()).await?,
@@ -205,6 +208,7 @@ async fn build_repos(config: &Config) -> anyhow::Result<Repos> {
         agents: Arc::new(aihub_persistence::SqliteAgentRepository::new(pool.clone())),
         evals: Arc::new(aihub_persistence::SqliteEvalRepository::new(pool.clone())),
         policies: Arc::new(aihub_persistence::SqlitePolicyRepository::new(pool.clone())),
+        jobs: Arc::new(aihub_persistence::SqliteJobRepository::new(pool.clone())),
     })
 }
 
@@ -213,7 +217,11 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     tracing::info!(target: "aihub::core", version = VERSION, mode = ?config.mode, "starting AI Hub core");
 
     // SQLite（Desktop 默认）/ PostgreSQL（Server 生产，M10）按 database.driver 选择。
-    let repos = build_repos(&config).await?;
+    let repos = build_repos(&config).await.map_err(|e| {
+        anyhow::anyhow!(
+            "{e}\n\nRecovery（方案 §23.1）：迁移失败不会进入正常服务。\n             - 备份后重试：aihub-server backup --output backup.tar\n             - 从备份恢复：aihub-server restore --from backup.tar\n             - 或将数据库文件移开后重新启动（将触发全新迁移）"
+        )
+    })?;
 
     // SecretStore（方案 §21.3）：Desktop 默认 OS Keychain；开发/CI 可选 memory；
     // Server 可选 env。macOS 上读取未签名二进制写入的钥匙串条目会触发授权弹窗，
@@ -276,10 +284,17 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
     } else {
         None
     };
+    // ObjectStorage（§21.2）：local（默认）/ s3-compatible（MinIO 等，SigV4）
+    let object_storage: Arc<dyn aihub_domain::storage::ObjectStorage> =
+        if config.storage.driver == "s3" {
+            Arc::new(aihub_application::s3_storage::S3ObjectStorage::from_env()?)
+        } else {
+            Arc::new(LocalObjectStorage::new(config.documents_dir()))
+        };
     let knowledge = Arc::new(KnowledgeService::new(
         repos.clone(),
         registry.clone(),
-        Arc::new(LocalObjectStorage::new(config.documents_dir())),
+        object_storage,
         runtime_client,
     ));
     let tool_executor = Arc::new(ToolExecutor::new(repos.clone()));

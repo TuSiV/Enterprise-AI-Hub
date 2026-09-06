@@ -3,6 +3,7 @@
 
 mod applications;
 mod audit;
+mod jobs;
 mod models;
 #[cfg(feature = "postgres")]
 pub mod pg_core;
@@ -18,6 +19,7 @@ pub use applications::{
     SqliteApiKeyRepository, SqliteApplicationRepository, SqliteQuotaRepository,
 };
 pub use audit::SqliteAuditRepository;
+pub use jobs::SqliteJobRepository;
 pub use models::SqliteModelRepository;
 pub use platform_store::{
     SqliteAgentRepository, SqliteEvalRepository, SqliteKnowledgeRepository,

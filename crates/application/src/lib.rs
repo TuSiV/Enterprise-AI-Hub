@@ -15,6 +15,7 @@ pub mod policy_service;
 pub mod prompt_service;
 pub mod registry;
 pub mod resolver;
+pub mod s3_storage;
 pub mod seed;
 pub mod services;
 
@@ -26,6 +27,7 @@ pub use pipeline::{AuthContext, ChatExecution, ChatPipeline, PipelineStreamEvent
 pub use registry::ProviderRegistry;
 pub use resolver::ModelResolver;
 
+use aihub_domain::platform::JobRepository;
 use aihub_domain::platform::*;
 use aihub_domain::prompt::PromptRepository;
 use aihub_domain::repos::*;
@@ -52,6 +54,7 @@ pub struct Repos {
     pub agents: Arc<dyn AgentRepository>,
     pub evals: Arc<dyn EvalRepository>,
     pub policies: Arc<dyn PolicyRepository>,
+    pub jobs: Arc<dyn JobRepository>,
 }
 
 pub const PLAYGROUND_APPLICATION_KEY: &str = "local-playground";

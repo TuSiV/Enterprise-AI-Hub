@@ -1,4 +1,18 @@
 const TOKEN_KEY = 'aihub_admin_token'
+// Connected Desktop（§25）：workspace 支持本地与多个 Server；serverUrl 持久化
+const SERVER_URL_KEY = 'aihub_server_url'
+
+export function getServerUrl(): string {
+  return localStorage.getItem(SERVER_URL_KEY) ?? ''
+}
+
+export function setServerUrl(url: string) {
+  if (url.trim()) {
+    localStorage.setItem(SERVER_URL_KEY, url.trim().replace(/\/$/, ''))
+  } else {
+    localStorage.removeItem(SERVER_URL_KEY)
+  }
+}
 
 export function getToken(): string | null {
   return localStorage.getItem(TOKEN_KEY)
@@ -31,7 +45,8 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
 
-  const res = await fetch(path, { ...init, headers })
+  const base = getServerUrl()
+  const res = await fetch(base ? `${base}${path}` : path, { ...init, headers })
   if (res.status === 401) {
     clearToken()
     window.dispatchEvent(new Event('aihub:unauthorized'))
@@ -53,7 +68,8 @@ async function requestEnvelope<T = any>(path: string, init?: RequestInit): Promi
   }
   const token = getToken()
   if (token) headers['Authorization'] = `Bearer ${token}`
-  const res = await fetch(path, { ...init, headers })
+  const base = getServerUrl()
+  const res = await fetch(base ? `${base}${path}` : path, { ...init, headers })
   if (res.status === 401) {
     clearToken()
     window.dispatchEvent(new Event('aihub:unauthorized'))

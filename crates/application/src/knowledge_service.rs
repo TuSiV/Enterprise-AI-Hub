@@ -16,6 +16,7 @@ use sha2::{Digest, Sha256};
 
 use crate::registry::ProviderRegistry;
 use crate::Repos;
+use async_trait::async_trait;
 
 /// 本地对象存储（§21.2 LocalObjectStorage）：documents/ 目录
 pub struct LocalObjectStorage {
@@ -27,32 +28,69 @@ impl LocalObjectStorage {
         let _ = std::fs::create_dir_all(&root);
         Self { root }
     }
+}
 
-    pub fn put(&self, key: &str, bytes: &[u8]) -> std::io::Result<()> {
+#[async_trait]
+impl aihub_domain::storage::ObjectStorage for LocalObjectStorage {
+    async fn put(
+        &self,
+        key: &str,
+        body: Vec<u8>,
+    ) -> Result<aihub_domain::storage::ObjectMeta, DomainError> {
         let path = self.root.join(key);
         if let Some(parent) = path.parent() {
-            std::fs::create_dir_all(parent)?;
+            std::fs::create_dir_all(parent).map_err(|e| {
+                DomainError::internal(
+                    DomainResource::Document,
+                    format!("storage mkdir failed: {e}"),
+                )
+            })?;
         }
-        std::fs::write(path, bytes)
+        let size = body.len() as i64;
+        std::fs::write(path, body).map_err(|e| {
+            DomainError::internal(
+                DomainResource::Document,
+                format!("storage write failed: {e}"),
+            )
+        })?;
+        Ok(aihub_domain::storage::ObjectMeta {
+            key: key.to_string(),
+            size_bytes: size,
+            extra: json!({"backend": "local"}),
+        })
     }
 
-    pub fn get(&self, key: &str) -> std::io::Result<Vec<u8>> {
-        std::fs::read(self.root.join(key))
+    async fn get(&self, key: &str) -> Result<Vec<u8>, DomainError> {
+        std::fs::read(self.root.join(key)).map_err(|e| {
+            DomainError::internal(
+                DomainResource::Document,
+                format!("storage read failed: {e}"),
+            )
+        })
     }
 
-    pub fn delete(&self, key: &str) -> std::io::Result<()> {
+    async fn delete(&self, key: &str) -> Result<(), DomainError> {
         let path = self.root.join(key);
         if path.exists() {
-            std::fs::remove_file(path)?;
+            std::fs::remove_file(path).map_err(|e| {
+                DomainError::internal(
+                    DomainResource::Document,
+                    format!("storage delete failed: {e}"),
+                )
+            })?;
         }
         Ok(())
+    }
+
+    async fn exists(&self, key: &str) -> Result<bool, DomainError> {
+        Ok(self.root.join(key).exists())
     }
 }
 
 pub struct KnowledgeService {
     repos: Repos,
     registry: Arc<ProviderRegistry>,
-    storage: Arc<LocalObjectStorage>,
+    storage: Arc<dyn aihub_domain::storage::ObjectStorage>,
     /// Python Runtime 客户端（M11）：pdf/docx 解析走 runtime
     runtime: Option<aihub_runtime_client::RuntimeClient>,
     /// chunking 配置（§19.3）：KB retrieval_config 可覆盖
@@ -81,7 +119,7 @@ impl KnowledgeService {
     pub fn new(
         repos: Repos,
         registry: Arc<ProviderRegistry>,
-        storage: Arc<LocalObjectStorage>,
+        storage: Arc<dyn aihub_domain::storage::ObjectStorage>,
         runtime: Option<aihub_runtime_client::RuntimeClient>,
     ) -> Self {
         Self {
@@ -160,7 +198,7 @@ impl KnowledgeService {
     pub async fn delete_kb(&self, id: &str) -> Result<(), DomainError> {
         let docs = self.repos.knowledge.list_documents(id).await?;
         for doc in docs {
-            let _ = self.storage.delete(&doc.storage_key);
+            let _ = self.storage.delete(&doc.storage_key).await;
         }
         self.repos.knowledge.delete_kb(id).await?;
         self.audit("kb.deleted", id, json!({})).await;
@@ -179,6 +217,7 @@ impl KnowledgeService {
     ) -> Result<Document, DomainError> {
         let kb = self.repos.knowledge.get_kb(kb_id).await?;
         let hash = hex::encode(Sha256::digest(&bytes));
+        let size_bytes = bytes.len() as i64;
         if let Some(existing) = self
             .repos
             .knowledge
@@ -217,12 +256,13 @@ impl KnowledgeService {
         }
 
         let storage_key = format!("{}/{}", kb.id, uuid::Uuid::new_v4());
-        self.storage.put(&storage_key, &bytes).map_err(|e| {
+        self.storage.put(&storage_key, bytes).await.map_err(|e| {
             DomainError::internal(
                 DomainResource::Document,
                 format!("object storage write failed: {e}"),
             )
         })?;
+        let _ = size_bytes;
 
         let doc = self
             .repos
@@ -231,7 +271,7 @@ impl KnowledgeService {
                 knowledge_base_id: kb.id.clone(),
                 filename: filename.to_string(),
                 mime_type: mime_type.to_string(),
-                size_bytes: bytes.len() as i64,
+                size_bytes,
                 file_hash: hash,
                 storage_key: storage_key.clone(),
             })
@@ -249,7 +289,7 @@ impl KnowledgeService {
             .knowledge
             .set_document_status(&doc.id, "parsing", "pending", None)
             .await?;
-        let raw_bytes = match self.storage.get(&storage_key) {
+        let raw_bytes = match self.storage.get(&storage_key).await {
             Ok(bytes) => bytes,
             Err(e) => {
                 self.repos
@@ -427,7 +467,7 @@ impl KnowledgeService {
         // 删除文档同时删除对应向量（§43.4）
         self.repos.knowledge.delete_chunks(id).await?;
         self.repos.knowledge.delete_document(id).await?;
-        let _ = self.storage.delete(&doc.storage_key);
+        let _ = self.storage.delete(&doc.storage_key).await;
         self.audit("document.deleted", id, json!({})).await;
         Ok(())
     }

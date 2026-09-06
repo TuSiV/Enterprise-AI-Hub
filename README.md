@@ -30,7 +30,12 @@
 | Evaluation（M16） | ✅ | dataset/cases/runs、rule 打分 + 可选 LLM Judge、成本/延迟回归对比 |
 | Security（M17） | ✅ | 数据分级→provider 矩阵、DLP（手机号/密钥脱敏+自定义规则）、SSRF 目标校验、routing/security 策略表 |
 
-未实现（明确标注）：Anthropic/Gemini 专属 Adapter、OIDC/TrustedHeader IdentityProvider、Connected Desktop 多工作区、分布式限流——见方案 §44 演进路线（Stage F 按需启动）。
+| Runtime Jobs（M11） | ✅ | runtime_jobs 持久化队列（重试/退避/requeue）+ 后台 worker + 管理 API |
+| 对象存储（M10/M12） | ✅ | ObjectStorage Port：Local（默认）/ S3-compatible（SigV4 最小实现，兼容 MinIO） |
+| Identity Provider（M10） | ✅ | local / trusted_header（§11.3 显式开启）/ oidc subject 映射 |
+| Connected Desktop（§25） | ✅ | 登录页支持 Server Workspace 地址切换，本地/远程统一 client |
+
+未实现（明确标注）：Anthropic/Gemini 专属 Adapter、OIDC token 校验（JWKS，需部署 IdP）、分布式限流（Stage F 按需）、Desktop 自动更新签名（需发布证书）。
 
 ## 快速开始
 

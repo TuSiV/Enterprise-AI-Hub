@@ -8,6 +8,7 @@ pub mod error;
 pub mod platform;
 pub mod prompt;
 pub mod repos;
+pub mod storage;
 
 pub use canonical::{
     CanonicalChatRequest, CanonicalChatResponse, CanonicalEmbeddingRequest,
@@ -17,3 +18,4 @@ pub use canonical::{
 pub use cost::{CostBreakdown, Pricing};
 pub use entities::*;
 pub use error::{DomainError, DomainErrorCode, DomainResource, ErrorCategory};
+pub use storage::{ObjectMeta, ObjectStorage};

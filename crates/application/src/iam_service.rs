@@ -196,6 +196,65 @@ impl IamService {
     }
 
     /// RBAC 检查：用户是否拥有指定权限（角色权限并集）。
+    /// TrustedHeader IdentityProvider（§14.2/§11.3）：仅对显式开启的 trusted upstream 生效，
+    /// 普通客户端不得通过 Header 伪造身份。
+    pub async fn identity_from_trusted_header(
+        &self,
+        header_user: &str,
+        display_name: &str,
+    ) -> Result<User, DomainError> {
+        if let Some(user) = self
+            .repos
+            .users
+            .get_by_subject("trusted_header", header_user)
+            .await?
+        {
+            return Ok(user);
+        }
+        let user = self
+            .repos
+            .users
+            .create(NewUser {
+                identity_provider: "trusted_header".into(),
+                external_subject: Some(header_user.to_string()),
+                username: Some(header_user.to_string()),
+                email: None,
+                display_name: display_name.to_string(),
+                password_hash: None,
+            })
+            .await?;
+        self.repos.users.assign_role(&user.id, "end_user").await?;
+        Ok(user)
+    }
+
+    /// OIDC IdentityProvider（§14.2）：外部 subject 映射 + 自动建号；
+    /// token 校验依赖 IdP 的 JWKS 端点（Server 部署配置 issuer/claient 凭据后启用）。
+    pub async fn identity_from_oidc(
+        &self,
+        issuer: &str,
+        subject: &str,
+        email: Option<&str>,
+    ) -> Result<User, DomainError> {
+        let _ = issuer; // token 校验由反代/网关完成，此处只做身份映射
+        if let Some(user) = self.repos.users.get_by_subject("oidc", subject).await? {
+            return Ok(user);
+        }
+        let user = self
+            .repos
+            .users
+            .create(NewUser {
+                identity_provider: "oidc".into(),
+                external_subject: Some(subject.to_string()),
+                username: Some(subject.to_string()),
+                email: email.map(|e| e.to_string()),
+                display_name: subject.to_string(),
+                password_hash: None,
+            })
+            .await?;
+        self.repos.users.assign_role(&user.id, "end_user").await?;
+        Ok(user)
+    }
+
     /// RBAC 检查：用户角色权限并集（系统角色用静态表；自定义角色回退数据库 role_permissions）。
     pub async fn has_permission(&self, user: &User, permission: &str) -> bool {
         let Ok(roles) = self.repos.users.roles_of(&user.id).await else {

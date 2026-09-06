@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api, setToken, ApiError } from '../api/client'
+import { api, setToken, setServerUrl, ApiError } from '../api/client'
 import type { SystemInfo } from '../api/types'
 
 // Tauri 桌面壳注入全局 __TAURI__（withGlobalTauri），自动完成登录
@@ -16,6 +16,7 @@ async function desktopToken(): Promise<string | null> {
 
 export default function Login() {
   const [token, setTokenValue] = useState('')
+  const [serverUrl, setServerUrlValue] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
@@ -23,6 +24,7 @@ export default function Login() {
   const submit = async (value?: string) => {
     setLoading(true)
     setError('')
+    setServerUrl(serverUrl)
     setToken(value ?? token)
     try {
       await api.get<SystemInfo>('/api/v1/admin/config')
@@ -49,6 +51,14 @@ export default function Login() {
       <div className="login-card">
         <h1>Enterprise AI Hub</h1>
         <p>输入 Admin Token 进入控制台。本地模式下 token 存储于应用数据目录 admin_token 文件。</p>
+        <label className="field">
+          <span className="field-label">服务器地址（留空 = 本地 Connected/Local Workspace，§25.1）</span>
+          <input
+            value={serverUrl}
+            onChange={(e) => setServerUrlValue(e.target.value)}
+            placeholder="https://aihub.example.com"
+          />
+        </label>
         <label className="field">
           <span className="field-label">Admin Token</span>
           <input
