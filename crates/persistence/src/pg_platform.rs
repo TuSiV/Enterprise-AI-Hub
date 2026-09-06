@@ -342,7 +342,7 @@ impl PgUsageRepository {
             .fetch_one(&self.pool)
             .await
             .ok()
-            .and_then(|row| row.try_get::<Option<f64>, _>("v").ok().map(|v| v.map(|x| x as i64)).flatten()))
+            .and_then(|row| row.try_get::<Option<f64>, _>("v").ok().and_then(|v| v.map(|x| x as i64))))
     }
 }
 
