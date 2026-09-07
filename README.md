@@ -6,6 +6,8 @@
 
 **所有模型统一接入 · 所有应用统一调用 · 所有路由统一治理 · 所有使用统一计量 · 所有行为统一审计**
 
+简体中文 · [English](README_EN.md)
+
 [![CI](https://github.com/TuSiV/ai-hub/actions/workflows/ci.yml/badge.svg)](https://github.com/TuSiV/ai-hub/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.94-DEA584?logo=rust)](https://www.rust-lang.org)
