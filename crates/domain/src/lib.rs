@@ -21,8 +21,8 @@ pub mod entities;
 pub mod error;
 pub mod platform;
 pub mod pricing;
-pub mod provider_presets;
 pub mod prompt;
+pub mod provider_presets;
 pub mod repos;
 pub mod storage;
 
