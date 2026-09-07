@@ -1,0 +1,51 @@
+name: CI Windows
+
+# Windows 验证（与 ci.yml 互相独立）：Rust Core 编译 + 测试 + Desktop 壳编译。
+# 不改动 Linux 侧任何 job；安装包（nsis/msi）由 Windows 发布机按需打包，CI 只验证代码可编译可测试。
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "crates/**"
+      - "apps/**"
+      - "web/**"
+      - "runtime/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-windows.yml"
+  pull_request:
+    paths:
+      - "crates/**"
+      - "apps/**"
+      - "Cargo.toml"
+      - "Cargo.lock"
+      - ".github/workflows/ci-windows.yml"
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  rust-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets --exclude aihub-desktop -- -D warnings
+      - name: Test (SQLite contract + gateway/platform e2e)
+        run: cargo test --workspace --exclude aihub-desktop
+
+  desktop-windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Clippy (desktop shell)
+        run: cargo clippy -p aihub-desktop -- -D warnings

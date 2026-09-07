@@ -60,6 +60,33 @@ fn open_in_browser(url: &str) {
     let _ = std::process::Command::new("xdg-open").arg(url).spawn();
 }
 
+/// Web UI 产物定位：安装后的 exe 工作目录不可控，按 exe 位置探测
+/// （Windows 安装目录资源 / macOS .app Resources / 仓库内 target 开发运行）。
+fn resolve_web_dist(config: &mut aihub_config::Config) {
+    if let Some(p) = &config.web.dist_path {
+        if std::path::Path::new(p).join("index.html").exists() {
+            return;
+        }
+    }
+    let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(|d| d.to_path_buf()))
+    else {
+        return;
+    };
+    let candidates = [
+        exe_dir.join("web/dist"),
+        exe_dir.join("../Resources/web/dist"),
+        exe_dir.join("../../web/dist"),
+    ];
+    if let Some(found) = candidates
+        .into_iter()
+        .find(|c| c.join("index.html").exists())
+    {
+        config.web.dist_path = Some(found.to_string_lossy().into_owned());
+    }
+}
+
 fn main() {
     let runtime = tokio::runtime::Builder::new_multi_thread()
         .enable_all()
@@ -67,8 +94,9 @@ fn main() {
         .expect("tokio runtime");
 
     {
-        let config = aihub_config::Config::load(None, Some(aihub_config::Mode::Desktop))
+        let mut config = aihub_config::Config::load(None, Some(aihub_config::Mode::Desktop))
             .expect("load config");
+        resolve_web_dist(&mut config);
         let endpoint = format!("http://127.0.0.1:{}", config.gateway.port);
         if already_running(&endpoint) {
             open_in_browser(&endpoint);
@@ -81,6 +109,7 @@ fn main() {
     let (handle, endpoint, admin_token) = runtime.block_on(async {
         let mut config = aihub_config::Config::load(None, Some(aihub_config::Mode::Desktop))
             .expect("load config");
+        resolve_web_dist(&mut config);
         let (addr, port) = aihub_server::bind(&config).await.expect("bind gateway");
         config.gateway.port = port;
         let core = aihub_server::bootstrap(config)
