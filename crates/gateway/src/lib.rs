@@ -89,11 +89,7 @@ async fn authenticate(
         .authenticate_key(&bearer)
         .await
         .map_err(GatewayError)?;
-    ctx.user_id = sanitize_user_id(
-        headers
-            .get("x-aihub-user")
-            .and_then(|v| v.to_str().ok()),
-    );
+    ctx.user_id = sanitize_user_id(headers.get("x-aihub-user").and_then(|v| v.to_str().ok()));
     Ok(ctx)
 }
 

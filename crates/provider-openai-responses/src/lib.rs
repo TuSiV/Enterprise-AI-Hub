@@ -239,9 +239,7 @@ impl OpenAIResponsesProvider {
             for item in items {
                 match item.get("type").and_then(|t| t.as_str()) {
                     Some("message") => {
-                        if let Some(parts) =
-                            item.get("content").and_then(|c| c.as_array())
-                        {
+                        if let Some(parts) = item.get("content").and_then(|c| c.as_array()) {
                             for part in parts {
                                 if part.get("type").and_then(|t| t.as_str()) == Some("output_text")
                                 {
@@ -253,9 +251,7 @@ impl OpenAIResponsesProvider {
                         }
                     }
                     Some("reasoning") => {
-                        if let Some(parts) =
-                            item.get("summary").and_then(|s| s.as_array())
-                        {
+                        if let Some(parts) = item.get("summary").and_then(|s| s.as_array()) {
                             for part in parts {
                                 if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
                                     reasoning.push_str(text);
@@ -302,8 +298,16 @@ impl OpenAIResponsesProvider {
         };
 
         CanonicalChatResponse {
-            content: if content.is_empty() { None } else { Some(content) },
-            reasoning_content: if reasoning.is_empty() { None } else { Some(reasoning) },
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(content)
+            },
+            reasoning_content: if reasoning.is_empty() {
+                None
+            } else {
+                Some(reasoning)
+            },
             tool_calls,
             finish_reason,
             usage: resp.get("usage").map(Self::map_usage),
@@ -315,8 +319,14 @@ impl OpenAIResponsesProvider {
     }
 
     fn map_usage(usage: &Value) -> CanonicalUsage {
-        let input = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        let output = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        let input = usage
+            .get("input_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let output = usage
+            .get("output_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         CanonicalUsage {
             input_tokens: input,
             output_tokens: output,
@@ -339,10 +349,7 @@ impl OpenAIResponsesProvider {
 
 fn extract_error_message(body: &str) -> String {
     if let Ok(value) = serde_json::from_str::<Value>(body) {
-        if let Some(message) = value
-            .pointer("/error/message")
-            .and_then(|m| m.as_str())
-        {
+        if let Some(message) = value.pointer("/error/message").and_then(|m| m.as_str()) {
             return message.to_string();
         }
         if let Some(message) = value.get("message").and_then(|m| m.as_str()) {
@@ -630,20 +637,21 @@ impl aihub_provider_core::ModelProvider for OpenAIResponsesProvider {
                     .collect::<Vec<_>>()
             })
             .unwrap_or_default();
-        let usage = parsed
-            .get("usage")
-            .map(|u| {
-                let input = u.get("prompt_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-                let output = u.get("total_tokens").and_then(|v| v.as_i64()).unwrap_or(input);
-                CanonicalUsage {
-                    input_tokens: input,
-                    output_tokens: output,
-                    cached_input_tokens: 0,
-                    reasoning_tokens: 0,
-                    total_tokens: output,
-                    source: UsageSource::Provider,
-                }
-            });
+        let usage = parsed.get("usage").map(|u| {
+            let input = u.get("prompt_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+            let output = u
+                .get("total_tokens")
+                .and_then(|v| v.as_i64())
+                .unwrap_or(input);
+            CanonicalUsage {
+                input_tokens: input,
+                output_tokens: output,
+                cached_input_tokens: 0,
+                reasoning_tokens: 0,
+                total_tokens: output,
+                source: UsageSource::Provider,
+            }
+        });
         Ok(CanonicalEmbeddingResponse { embeddings, usage })
     }
 

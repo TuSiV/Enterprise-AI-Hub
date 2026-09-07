@@ -29,10 +29,11 @@
 
 | 能力 | 说明 |
 |:---:|---|
-| 🔌 **统一接入** | Provider（OpenAI 兼容 / Ollama…）注册 + 连接测试 + 模型自动发现 |
+| 🔌 **统一接入** | Provider 原生协议（OpenAI / Anthropic / Gemini / Ollama…）注册 + 连接测试 + 模型自动发现 |
 | 🧭 **智能路由** | Virtual Model 抽象（客户端零改动换后端）、优先级 Failover、熔断器、重试 |
 | 🔑 **统一调用** | Application / API Key 生命周期、模型白名单、RPM / 日请求 / 月成本配额 |
-| 📊 **统一计量** | Token 与成本（microunits 整数 + 计费快照）、P95/TTFT、按模型 / 应用聚合 |
+| 📊 **统一计量** | Token 与成本（microunits 整数 + 计费快照）、P95/TTFT、按模型 / 应用 / 用户聚合 |
+| 👤 **用户归因** | 终端用户 `user_id` 全链路追踪（OpenAI `user` 字段 / `X-AiHub-User` 头），按用户聚合使用量与成本 |
 | 🛡️ **统一治理** | 全量审计、RBAC 多用户、数据分级 → 路由矩阵、DLP 脱敏、SSRF 校验 |
 | 📚 **知识增强** | 知识库上传 → 解析（PDF/DOCX）→ Chunk → Embedding → 混合检索 → 带引用回答 |
 | 🤖 **Agent / MCP** | 版本化 Agent 循环执行、工具白名单与全量审计、MCP stdio / HTTP 双通道 |
@@ -120,7 +121,7 @@
 
 | | New API | **Enterprise AI Hub** |
 |---|:---:|:---:|
-| 多模型接入 / 格式互转 | ✅ OpenAI/Claude/Gemini 互转，覆盖 Midjourney、Suno、Rerank 等 | ✅ OpenAI 兼容 Adapter，聚焦企业业务系统接入 |
+| 多模型接入 / 格式互转 | ✅ OpenAI/Claude/Gemini 互转，覆盖 Midjourney、Suno、Rerank 等 | ✅ OpenAI / Anthropic / Gemini 原生协议，聚焦企业业务系统接入 |
 | 智能路由 | ✅ 渠道加权随机 + 失败重试 + 用户级限流 | ✅ Virtual Model 抽象 + 优先级 Failover + 熔断器 |
 | 用量与成本核算 | ✅ 按次/按量/缓存命中计费，运营级数据看板 | ✅ Token/成本 microunits + P95/TTFT，按模型/应用聚合 |
 | 权限与治理 | ⚠️ 令牌分组、模型限制、用户管理 | ✅ RBAC 多用户 + 数据分级路由矩阵 + DLP 脱敏 + SSRF 校验 |
@@ -146,13 +147,16 @@
                └────────┬────────┴────────────────────┘
                         ▼
         ┌───────────────────────────────────────────┐
-        │              Rust Core (13 crates)         │
+        │              Rust Core (16 crates)         │
         │                                            │
         │  认证 → 配额 → 解析 → 路由 → 重试/熔断      │
-        │  → Usage/Cost → 审计                       │
+        │  → Usage/Cost → user_id → 审计             │
         ├────────────┬─────────────┬─────────────────┤
         │ Gateway    │ Application │ Provider Adapter │
-        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI 兼容(核心) │
+        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI (核心)    │
+        │            │             │ Anthropic (原生) │
+        │            │             │ Gemini (原生)    │
+        │            │             │ Ollama / 其他    │
         ├────────────┴──────┬──────┴─────────────────┤
         ▼                   ▼                         ▼
   SQLite / PostgreSQL   Secret Store         Python Runtime Sidecar
@@ -295,7 +299,7 @@ cd web && npm run build                                 # TS 类型检查 + 构�
 ./scripts/smoke.sh                                      # 进程级端到端冒烟
 ```
 
-覆盖矩阵：**Provider Adapter 契约（11 个标准化用例）** · 网关集成（鉴权 / Failover / 流式 / 限流 / 撤销 Key）·
+覆盖矩阵：**Provider Adapter 契约（OpenAI / Anthropic / Gemini / OpenAI Responses 四协议）** · 网关集成（鉴权 / Failover / 流式 / 限流 / 撤销 Key）·
 平台 e2e（Prompt / KB / Agent / Eval / DLP / OIDC 验签）· RBAC 多用户与防伪造 · 并发与取消风暴 ·
 SQLite / PostgreSQL 双库契约。
 
@@ -329,7 +333,10 @@ CLI：`aihub-server --config <toml> --mode <desktop|server> --port <n> --print-a
 │   ├── application             # 服务层 + 执行流水线 + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 协议适配 + SSE
 │   ├── persistence             # SQLite/PostgreSQL Adapter + 迁移
-│   ├── provider-*              # Provider Adapter（OpenAI 兼容核心）
+│   ├── provider-openai-compatible  # OpenAI 兼容核心 Adapter
+│   ├── provider-anthropic          # Anthropic Messages API 原生 Adapter
+│   ├── provider-gemini             # Gemini generateContent 原生 Adapter
+│   ├── provider-openai-responses   # OpenAI Responses API Adapter
 │   ├── secrets / config / …    # 基础设施 Port
 │   └── runtime-client          # Sidecar 托管与协议
 ├── apps/

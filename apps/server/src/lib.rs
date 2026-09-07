@@ -40,8 +40,8 @@ use aihub_application::services::{
 };
 use aihub_application::Repos;
 use aihub_config::Config;
-use aihub_provider_core::ProviderFactory;
 use aihub_provider_anthropic::AnthropicFactory;
+use aihub_provider_core::ProviderFactory;
 use aihub_provider_gemini::GeminiFactory;
 use aihub_provider_openai_compatible::OpenAICompatibleFactory;
 use aihub_provider_openai_responses::OpenAIResponsesFactory;

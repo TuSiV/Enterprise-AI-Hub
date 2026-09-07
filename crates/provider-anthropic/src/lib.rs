@@ -90,7 +90,10 @@ impl AnthropicProvider {
     }
 
     fn auth_request(&self, method: reqwest::Method, url: String) -> reqwest::RequestBuilder {
-        let mut rb = self.http.request(method, url).header("anthropic-version", ANTHROPIC_VERSION);
+        let mut rb = self
+            .http
+            .request(method, url)
+            .header("anthropic-version", ANTHROPIC_VERSION);
         if let Some(secret) = &self.credential {
             if !secret.is_empty() {
                 rb = rb.header("x-api-key", secret.expose());
@@ -161,27 +164,39 @@ impl AnthropicProvider {
                 }
                 MessageRole::Assistant => {
                     if !m.content.is_empty() {
-                        push_block(&mut messages, "assistant", json!({
-                            "type": "text",
-                            "text": m.content.clone(),
-                        }));
+                        push_block(
+                            &mut messages,
+                            "assistant",
+                            json!({
+                                "type": "text",
+                                "text": m.content.clone(),
+                            }),
+                        );
                     }
                     for call in m.tool_calls.iter().flatten() {
                         let input = serde_json::from_str::<Value>(&call.arguments)
                             .unwrap_or_else(|_| json!({}));
-                        push_block(&mut messages, "assistant", json!({
-                            "type": "tool_use",
-                            "id": call.id,
-                            "name": call.name,
-                            "input": input,
-                        }));
+                        push_block(
+                            &mut messages,
+                            "assistant",
+                            json!({
+                                "type": "tool_use",
+                                "id": call.id,
+                                "name": call.name,
+                                "input": input,
+                            }),
+                        );
                     }
                 }
                 MessageRole::User => {
-                    push_block(&mut messages, "user", json!({
-                        "type": "text",
-                        "text": m.content.clone(),
-                    }));
+                    push_block(
+                        &mut messages,
+                        "user",
+                        json!({
+                            "type": "text",
+                            "text": m.content.clone(),
+                        }),
+                    );
                 }
             }
         }
@@ -279,8 +294,16 @@ impl AnthropicProvider {
         }
         let usage = resp.get("usage").map(Self::map_usage);
         CanonicalChatResponse {
-            content: if content.is_empty() { None } else { Some(content) },
-            reasoning_content: if reasoning.is_empty() { None } else { Some(reasoning) },
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(content)
+            },
+            reasoning_content: if reasoning.is_empty() {
+                None
+            } else {
+                Some(reasoning)
+            },
             tool_calls,
             finish_reason: resp
                 .get("stop_reason")
@@ -295,8 +318,14 @@ impl AnthropicProvider {
     }
 
     fn map_usage(usage: &Value) -> CanonicalUsage {
-        let input = usage.get("input_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
-        let output = usage.get("output_tokens").and_then(|v| v.as_i64()).unwrap_or(0);
+        let input = usage
+            .get("input_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
+        let output = usage
+            .get("output_tokens")
+            .and_then(|v| v.as_i64())
+            .unwrap_or(0);
         CanonicalUsage {
             input_tokens: input,
             output_tokens: output,
@@ -588,7 +617,10 @@ impl aihub_provider_core::ModelProvider for AnthropicProvider {
         // Messages API 无 embeddings 端点；调用方应路由到 embedding 型 Provider。
         Err(ProviderError::new(
             ErrorCategory::InvalidRequest,
-            format!("provider '{}' (anthropic) does not support embeddings", self.provider_key),
+            format!(
+                "provider '{}' (anthropic) does not support embeddings",
+                self.provider_key
+            ),
         ))
     }
 
@@ -742,10 +774,16 @@ mod tests {
 
     #[test]
     fn url_joins_v1_once() {
-        assert_eq!(provider().url("/messages"), "https://api.anthropic.com/v1/messages");
+        assert_eq!(
+            provider().url("/messages"),
+            "https://api.anthropic.com/v1/messages"
+        );
         let mut with_v1 = provider();
         with_v1.base_url = "https://api.anthropic.com/v1".into();
-        assert_eq!(with_v1.url("/messages"), "https://api.anthropic.com/v1/messages");
+        assert_eq!(
+            with_v1.url("/messages"),
+            "https://api.anthropic.com/v1/messages"
+        );
     }
 
     #[test]

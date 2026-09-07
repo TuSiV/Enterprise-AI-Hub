@@ -400,9 +400,8 @@ impl UsageRepository for PgUsageRepository {
     }
 
     async fn by_user(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>> {
-        let mut sql = format!(
-            "SELECT COALESCE(r.user_id, 'anonymous') AS bucket, {AGG_SELECT}{USAGE_JOIN}"
-        );
+        let mut sql =
+            format!("SELECT COALESCE(r.user_id, 'anonymous') AS bucket, {AGG_SELECT}{USAGE_JOIN}");
         let mut binds: Vec<String> = Vec::new();
         if let Some(app) = &query.application_id {
             sql.push_str(&format!(" WHERE r.application_id = ${}", binds.len() + 1));

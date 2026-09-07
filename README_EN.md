@@ -29,10 +29,11 @@ Enterprises don't need "yet another chatbot". They face fragmented model access,
 
 | Capability | What you get |
 |:---:|---|
-| 🔌 **Unified Access** | Provider registration (OpenAI-compatible / Ollama…) + connection testing + automatic model discovery |
+| 🔌 **Unified Access** | Provider native protocols (OpenAI / Anthropic / Gemini / Ollama…) + connection testing + automatic model discovery |
 | 🧭 **Smart Routing** | Virtual Model abstraction (swap backends, zero client changes), priority failover, circuit breakers, retries |
 | 🔑 **Unified Invocation** | Application / API Key lifecycle, model allow-lists, RPM / daily / monthly-cost quotas |
-| 📊 **Unified Metering** | Token & cost (integer microunits + pricing snapshots), P95/TTFT, per-model / per-app rollups |
+| 📊 **Unified Metering** | Token & cost (integer microunits + pricing snapshots), P95/TTFT, per-model / per-app / per-user rollups |
+| 👤 **User Attribution** | End-user `user_id` full-chain tracking (OpenAI `user` field / `X-AiHub-User` header), per-user usage & cost aggregation |
 | 🛡️ **Unified Governance** | Full audit trail, RBAC, data-classification → routing matrix, DLP redaction, SSRF guard |
 | 📚 **Knowledge** | KB upload → parse (PDF/DOCX) → chunk → embed → hybrid retrieval → cited answers |
 | 🤖 **Agents / MCP** | Versioned agent loops, tool allow-lists with full audit, MCP over stdio / HTTP |
@@ -126,13 +127,16 @@ Benchmark new models on shared datasets with cost and latency regression, instea
                └────────┬────────┴────────────────────┘
                         ▼
         ┌───────────────────────────────────────────┐
-        │              Rust Core (13 crates)         │
+        │              Rust Core (16 crates)         │
         │                                            │
         │  auth → quota → resolve → route → retry/   │
-        │  breaker → Usage/Cost → audit              │
+        │  breaker → Usage/Cost → user_id → audit    │
         ├────────────┬─────────────┬─────────────────┤
         │ Gateway    │ Application │ Provider Adapter │
-        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI-compatible│
+        │ /v1/* + SSE│ RBAC + Jobs │ OpenAI (core)    │
+        │            │             │ Anthropic (native)│
+        │            │             │ Gemini (native)   │
+        │            │             │ Ollama / others   │
         ├────────────┴──────┬──────┴─────────────────┤
         ▼                   ▼                         ▼
   SQLite / PostgreSQL   Secret Store         Python Runtime Sidecar
@@ -306,7 +310,10 @@ CLI: `aihub-server --config <toml> --mode <desktop|server> --port <n> --print-ad
 │   ├── application             # services + execution pipeline + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 protocol adapter + SSE
 │   ├── persistence             # SQLite/PostgreSQL adapters + migrations
-│   ├── provider-*              # provider adapters (OpenAI-compatible core)
+│   ├── provider-openai-compatible  # OpenAI compatible core adapter
+│   ├── provider-anthropic          # Anthropic Messages API native adapter
+│   ├── provider-gemini             # Gemini generateContent native adapter
+│   ├── provider-openai-responses   # OpenAI Responses API adapter
 │   ├── secrets / config / …    # infrastructure ports
 │   └── runtime-client          # sidecar supervision & protocol
 ├── apps/

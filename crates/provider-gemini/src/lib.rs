@@ -133,13 +133,14 @@ impl GeminiProvider {
             500..=599 => ProviderError::new(ErrorCategory::Provider5xx, message.clone()),
             _ => {
                 let lower = message.to_lowercase();
-                let category = if lower.contains("token count") || lower.contains("exceeds the maximum") {
-                    ErrorCategory::ContextLengthExceeded
-                } else if lower.contains("safety") {
-                    ErrorCategory::ContentFiltered
-                } else {
-                    ErrorCategory::InvalidRequest
-                };
+                let category =
+                    if lower.contains("token count") || lower.contains("exceeds the maximum") {
+                        ErrorCategory::ContextLengthExceeded
+                    } else if lower.contains("safety") {
+                        ErrorCategory::ContentFiltered
+                    } else {
+                        ErrorCategory::InvalidRequest
+                    };
                 ProviderError::new(category, message.clone())
             }
         };
@@ -210,14 +211,15 @@ impl GeminiProvider {
             generation_config["maxOutputTokens"] = json!(max);
         }
         if let Some(rf) = &request.response_format {
-            if matches!(
-                rf,
-                aihub_domain::canonical::ResponseFormat::Json
-            ) {
+            if matches!(rf, aihub_domain::canonical::ResponseFormat::Json) {
                 generation_config["responseMimeType"] = json!("application/json");
             }
         }
-        if generation_config.as_object().map(|o| !o.is_empty()).unwrap_or(false) {
+        if generation_config
+            .as_object()
+            .map(|o| !o.is_empty())
+            .unwrap_or(false)
+        {
             body["generationConfig"] = generation_config;
         }
 
@@ -253,9 +255,7 @@ impl GeminiProvider {
         }
 
         let path = if stream {
-            format!(
-                "/models/{model_id}:streamGenerateContent?alt=sse"
-            )
+            format!("/models/{model_id}:streamGenerateContent?alt=sse")
         } else {
             format!("/models/{model_id}:generateContent")
         };
@@ -276,7 +276,11 @@ impl GeminiProvider {
         {
             for part in parts {
                 if let Some(text) = part.get("text").and_then(|t| t.as_str()) {
-                    if part.get("thought").and_then(|t| t.as_bool()).unwrap_or(false) {
+                    if part
+                        .get("thought")
+                        .and_then(|t| t.as_bool())
+                        .unwrap_or(false)
+                    {
                         reasoning.push_str(text);
                     } else {
                         content.push_str(text);
@@ -304,8 +308,16 @@ impl GeminiProvider {
             .and_then(|v| v.as_str())
             .map(map_finish_reason);
         CanonicalChatResponse {
-            content: if content.is_empty() { None } else { Some(content) },
-            reasoning_content: if reasoning.is_empty() { None } else { Some(reasoning) },
+            content: if content.is_empty() {
+                None
+            } else {
+                Some(content)
+            },
+            reasoning_content: if reasoning.is_empty() {
+                None
+            } else {
+                Some(reasoning)
+            },
             tool_calls,
             finish_reason,
             usage: resp.get("usageMetadata").map(Self::map_usage),
@@ -371,10 +383,7 @@ fn map_finish_reason(reason: &str) -> String {
 
 fn extract_error_message(body: &str) -> String {
     if let Ok(value) = serde_json::from_str::<Value>(body) {
-        if let Some(message) = value
-            .pointer("/error/message")
-            .and_then(|m| m.as_str())
-        {
+        if let Some(message) = value.pointer("/error/message").and_then(|m| m.as_str()) {
             return message.to_string();
         }
     }
@@ -426,11 +435,7 @@ impl aihub_provider_core::ModelProvider for GeminiProvider {
                     let methods = m
                         .get("supportedGenerationMethods")
                         .and_then(|v| v.as_array())
-                        .map(|a| {
-                            a.iter()
-                                .filter_map(|x| x.as_str())
-                                .collect::<Vec<_>>()
-                        })
+                        .map(|a| a.iter().filter_map(|x| x.as_str()).collect::<Vec<_>>())
                         .unwrap_or_default();
                     let model_type = if methods.contains(&"embedContent") {
                         "embedding"
@@ -446,9 +451,7 @@ impl aihub_provider_core::ModelProvider for GeminiProvider {
                             .and_then(|v| v.as_str())
                             .map(|s| s.to_string()),
                         model_type: Some(model_type.to_string()),
-                        context_window: m
-                            .get("inputTokenLimit")
-                            .and_then(|v| v.as_i64()),
+                        context_window: m.get("inputTokenLimit").and_then(|v| v.as_i64()),
                         capabilities: None,
                     });
                 }
@@ -827,12 +830,18 @@ mod tests {
     #[test]
     fn stream_path_and_flag() {
         let (path, _) = provider().build_generate_body(&request_fixture(), true);
-        assert_eq!(path, "/models/gemini-2.5-flash:streamGenerateContent?alt=sse");
+        assert_eq!(
+            path,
+            "/models/gemini-2.5-flash:streamGenerateContent?alt=sse"
+        );
     }
 
     #[test]
     fn model_id_strips_prefix() {
-        assert_eq!(GeminiProvider::model_id("models/gemini-2.0-flash"), "gemini-2.0-flash");
+        assert_eq!(
+            GeminiProvider::model_id("models/gemini-2.0-flash"),
+            "gemini-2.0-flash"
+        );
     }
 
     #[test]
