@@ -107,6 +107,7 @@ Benchmark new models on shared datasets with cost and latency regression, instea
 | Unified multi-model access | ❌ integrate one by one | ⚠️ you maintain it | ✅ Provider Adapters built in |
 | Smart routing / failover / circuit breaking | ❌ | ⚠️ build it yourself | ✅ Virtual Model + retry + breakers |
 | Unified cost & usage metering | ❌ | ⚠️ build it yourself | ✅ tokens / cost / P95 / TTFT, full dimensions |
+| Built-in provider & pricing presets | ❌ | ❌ | ✅ 14 built-in providers + 40+ model prices (OpenAI / Anthropic / Gemini / DeepSeek / GLM / MiniMax…), one-click fill in console |
 | Full audit + RBAC + DLP | ❌ | ⚠️ build it yourself | ✅ built in |
 | Knowledge RAG (with citations) | ❌ | ❌ | ✅ parse / embed / hybrid retrieval |
 | Enforced agent permission isolation | — | ⚠️ by convention | ✅ enforced intersection in Core, not prompts |
@@ -159,6 +160,8 @@ cargo run -p aihub-desktop
 ```
 
 > Re-running opens the already-running instance (single-instance semantics); if port 8787 is busy it automatically falls back to the next port.
+
+> First-time setup: when adding a provider, pick a built-in provider preset (OpenAI / Anthropic / Gemini / DeepSeek / GLM and 14 in total — base URL auto-filled, just enter the API key); when registering a model, one-click fill pricing from the preset library (40+ mainstream models).
 
 <details>
 <summary><b>Headless (browser only)</b></summary>
@@ -306,7 +309,7 @@ CLI: `aihub-server --config <toml> --mode <desktop|server> --port <n> --print-ad
 
 ```
 ├── crates/                     # Rust Core (plan §7.1: domain has zero reverse dependencies)
-│   ├── domain                  # entities / canonical protocol / repository ports / cost engine
+│   ├── domain                  # entities / canonical protocol / repository ports / cost engine / pricing presets
 │   ├── application             # services + execution pipeline + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 protocol adapter + SSE
 │   ├── persistence             # SQLite/PostgreSQL adapters + migrations

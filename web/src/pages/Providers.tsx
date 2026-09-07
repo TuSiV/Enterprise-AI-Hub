@@ -15,7 +15,7 @@
 import { t } from '../i18n'
 import { useEffect, useState } from 'react'
 import { api, qs } from '../api/client'
-import type { ProviderDto, ModelDto } from '../api/types'
+import type { ProviderDto, ModelDto, ProviderPreset } from '../api/types'
 import { formatTime } from '../api/types'
 import { Button, Card, Field, Modal, Table, HealthBadge, Toast, Spinner, EmptyState, Badge } from '../components/ui'
 
@@ -204,6 +204,27 @@ function ProviderForm({
   const [timeoutMs, setTimeoutMs] = useState(String(provider?.timeoutMs ?? 120000))
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState('')
+  const [presets, setPresets] = useState<ProviderPreset[]>([])
+  const [selectedPreset, setSelectedPreset] = useState('')
+
+  useEffect(() => {
+    // api.get 已解包 {data, meta} 信封，直接返回数组
+    api.get<ProviderPreset[]>('/api/v1/admin/provider-presets')
+      .then(res => setPresets(Array.isArray(res) ? res : []))
+      .catch(() => {})
+  }, [])
+
+  const applyPreset = (presetKey: string) => {
+    setSelectedPreset(presetKey)
+    const preset = presets.find(p => p.key === presetKey)
+    if (preset) {
+      // Key 是用户可改的稳定标识：仅在未手输时用预置值，避免覆盖
+      if (!key.trim()) setKey(preset.key)
+      setName(preset.name)
+      setKind(preset.kind)
+      setBaseUrl(preset.baseUrl)
+    }
+  }
 
   const save = async () => {
     setSaving(true)
@@ -235,9 +256,28 @@ function ProviderForm({
   return (
     <Modal title={title} onClose={onClose}>
       {!provider && (
-        <Field label={t("Key（稳定标识）")} hint={t("用于程序引用，例如 openai-primary")}>
-          <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="openai-primary" />
-        </Field>
+        <>
+          {presets.length > 0 && (
+            <Field
+              label={t("快速选择内置服务商")}
+              hint={presets.find(p => p.key === selectedPreset)
+                ? t("默认模型 {0}；保存后可在服务商列表「发现模型」", [presets.find(p => p.key === selectedPreset)!.defaultModel])
+                : t("选择后自动填充配置，只需填写 API Key")}
+            >
+              <select value={selectedPreset} onChange={(e) => applyPreset(e.target.value)}>
+                <option value="">{t("不使用预置（手动填写）")}</option>
+                {presets.map(p => (
+                  <option key={p.key} value={p.key}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </Field>
+          )}
+          <Field label={t("Key（稳定标识）")} hint={t("用于程序引用，例如 openai-primary")}>
+            <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="openai-primary" />
+          </Field>
+        </>
       )}
       <Field label={t("名称")}>
         <input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("显示名称")} />

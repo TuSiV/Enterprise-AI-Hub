@@ -61,6 +61,23 @@ export interface Pricing {
   reasoning?: number | null
 }
 
+export interface PricingPreset {
+  modelKey: string
+  displayName: string
+  provider: string
+  pricing: Pricing
+  contextWindow: number | null
+  maxOutput: number | null
+}
+
+export interface ProviderPreset {
+  key: string
+  name: string
+  kind: string
+  baseUrl: string
+  defaultModel: string
+}
+
 export interface VirtualModelTargetDto {
   id: string
   modelId: string

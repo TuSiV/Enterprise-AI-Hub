@@ -107,6 +107,7 @@
 | 多模型统一接入 | ❌ 逐个对接 | ⚠️ 需自行维护 | ✅ Provider Adapter 内置 |
 | 智能路由 / Failover / 熔断 | ❌ | ⚠️ 需自研 | ✅ Virtual Model + 熔断重试 |
 | 成本与用量统一计量 | ❌ | ⚠️ 需自建 | ✅ Token/成本/P95/TTFT 全维度 |
+| 预置服务商与模型价格 | ❌ | ❌ | ✅ 14 家内置服务商 + OpenAI / Anthropic / Gemini / DeepSeek / GLM / MiniMax 等 40+ 模型价格，控制台一键填充 |
 | 全量审计 + RBAC + DLP | ❌ | ⚠️ 需自建 | ✅ 内置 |
 | 知识库 RAG（带引用） | ❌ | ❌ | ✅ 解析/Embedding/混合检索 |
 | Agent 权限强制隔离 | — | ⚠️ 靠约定 | ✅ Core 强制交集，非 Prompt 约定 |
@@ -179,6 +180,8 @@ cargo run -p aihub-desktop
 ```
 
 > 再次运行会自动打开已运行实例（单实例语义）；8787 端口被占用时自动退让。
+
+> 首次配置：添加 Provider 时可直接选择内置服务商预设（OpenAI / Anthropic / Gemini / DeepSeek / GLM 等 14 家，自动填充 Base URL，只需填 API Key）；登记模型时可从预置价格库（40+ 主流模型）一键填充定价。
 
 <details>
 <summary><b>无桌面窗口（纯浏览器）</b></summary>
@@ -329,7 +332,7 @@ CLI：`aihub-server --config <toml> --mode <desktop|server> --port <n> --print-a
 
 ```
 ├── crates/                     # Rust Core（domain 层零基础设施反向依赖）
-│   ├── domain                  # 实体/规范协议/仓储 Port/成本引擎
+│   ├── domain                  # 实体/规范协议/仓储 Port/成本引擎/预置价格库
 │   ├── application             # 服务层 + 执行流水线 + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 协议适配 + SSE
 │   ├── persistence             # SQLite/PostgreSQL Adapter + 迁移

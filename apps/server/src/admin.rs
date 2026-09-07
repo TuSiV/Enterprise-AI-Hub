@@ -22,6 +22,8 @@
 use aihub_api_types::admin::*;
 use aihub_api_types::common::{ApiErrorBody, PageMeta, PageResponse};
 use aihub_domain::error::DomainError;
+use aihub_domain::pricing::{self, PricingPreset};
+use aihub_domain::provider_presets::{self, ProviderPreset};
 use axum::extract::{Path, Query, State};
 use axum::http::{HeaderMap, StatusCode};
 use axum::middleware::Next;
@@ -53,6 +55,8 @@ pub fn router(state: AppState) -> Router {
             "/v1/admin/providers/{id}/discover-models",
             post(providers_discover),
         )
+        // provider presets
+        .route("/v1/admin/provider-presets", get(provider_presets_list))
         // models
         .route("/v1/admin/models", get(models_list).post(models_create))
         .route(
@@ -61,6 +65,8 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/admin/models/{id}/enable", post(models_enable))
         .route("/v1/admin/models/{id}/disable", post(models_disable))
+        // pricing presets
+        .route("/v1/admin/pricing-presets", get(pricing_presets_list))
         // virtual models
         .route(
             "/v1/admin/virtual-models",
@@ -426,6 +432,16 @@ async fn models_list(
         Ok(list) => Ok(Json(serde_json::json!({ "data": list, "meta": {} }))),
         Err(e) => Err(domain_error_response(&e)),
     }
+}
+
+async fn pricing_presets_list() -> Json<serde_json::Value> {
+    let presets: Vec<&PricingPreset> = pricing::PRESETS.iter().collect();
+    Json(serde_json::json!({ "data": presets, "meta": {} }))
+}
+
+async fn provider_presets_list() -> Json<serde_json::Value> {
+    let presets: Vec<&ProviderPreset> = provider_presets::PRESETS.iter().collect();
+    Json(serde_json::json!({ "data": presets, "meta": {} }))
 }
 
 async fn models_create(

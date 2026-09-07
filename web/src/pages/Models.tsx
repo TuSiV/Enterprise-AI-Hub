@@ -15,7 +15,7 @@
 import { t, number } from '../i18n'
 import { useEffect, useState, useMemo } from 'react'
 import { api } from '../api/client'
-import type { ModelDto, Pricing } from '../api/types'
+import type { ModelDto, Pricing, PricingPreset } from '../api/types'
 import { Badge, Button, Card, Field, Modal, Table, Toast, Spinner, EmptyState } from '../components/ui'
 
 export default function Models() {
@@ -169,6 +169,7 @@ function ModelForm({
   const [displayName, setDisplayName] = useState(model?.displayName ?? '')
   const [modelType, setModelType] = useState(model?.modelType ?? 'chat')
   const [contextWindow, setContextWindow] = useState(String(model?.contextWindow ?? ''))
+  const [maxOutput, setMaxOutput] = useState(String(model?.maxOutputTokens ?? ''))
   const [pricing, setPricing] = useState<Pricing>(() => {
     const original = model?.pricing ?? { currency: 'USD', unitTokens: 1000000 }
     const factor = 1000000 / (original.unitTokens && original.unitTokens > 0 ? original.unitTokens : 1000000)
@@ -176,15 +177,49 @@ function ModelForm({
   })
   const [error, setError] = useState('')
   const [saving, setSaving] = useState(false)
+  const [presets, setPresets] = useState<PricingPreset[]>([])
+  const [selectedPreset, setSelectedPreset] = useState('')
+
+  useEffect(() => {
+    // api.get 已解包 {data, meta} 信封，直接返回数组
+    api.get<PricingPreset[]>('/api/v1/admin/pricing-presets')
+      .then(res => setPresets(Array.isArray(res) ? res : []))
+      .catch(() => {})
+  }, [])
+
+  const applyPreset = (presetKey: string) => {
+    setSelectedPreset(presetKey)
+    const preset = presets.find(p => p.modelKey === presetKey)
+    if (preset) {
+      setModelKey(preset.modelKey)
+      setDisplayName(preset.displayName)
+      setContextWindow(preset.contextWindow != null ? String(preset.contextWindow) : '')
+      setMaxOutput(preset.maxOutput != null && preset.maxOutput > 0 ? String(preset.maxOutput) : '')
+      setPricing({
+        currency: preset.pricing.currency ?? 'USD',
+        unitTokens: 1000000,
+        input: preset.pricing.input ?? null,
+        output: preset.pricing.output ?? null,
+        cachedInput: preset.pricing.cachedInput ?? null,
+        reasoning: preset.pricing.reasoning ?? null,
+      })
+      const typeHint = preset.modelKey.includes('embedding')
+        ? 'embedding'
+        : preset.pricing.reasoning != null ? 'reasoning' : 'chat'
+      setModelType(typeHint)
+    }
+  }
 
   const save = async () => {
     setSaving(true)
     setError('')
     const ctx = Number(contextWindow)
+    const mx = Number(maxOutput)
     const payload: any = {
       displayName,
       modelType,
       contextWindow: ctx > 0 ? ctx : null,
+      maxOutputTokens: mx > 0 ? mx : null,
       pricing,
     }
     try {
@@ -208,6 +243,28 @@ function ModelForm({
     <Modal title={model ? t("编辑 {0}", [model.displayName]) : t("登记模型")} onClose={onClose}>
       {!model && (
         <>
+          {presets.length > 0 && (
+            <Field label={t("快速填充预置价格")} hint={t("选择后自动填充模型信息和价格，可手动修改")}>
+              <select value={selectedPreset} onChange={(e) => applyPreset(e.target.value)}>
+                <option value="">{t("不使用预置（手动填写）")}</option>
+                {Object.entries(
+                  presets.reduce((acc, p) => {
+                    if (!acc[p.provider]) acc[p.provider] = []
+                    acc[p.provider].push(p)
+                    return acc
+                  }, {} as Record<string, PricingPreset[]>)
+                ).map(([provider, items]) => (
+                  <optgroup key={provider} label={provider}>
+                    {items.map(p => (
+                      <option key={p.modelKey} value={p.modelKey}>
+                        {p.displayName}{p.pricing.input != null ? ` ($${p.pricing.input}/${p.pricing.output ?? '?'})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
+                ))}
+              </select>
+            </Field>
+          )}
           <Field label="Provider">
             <select value={providerId} onChange={(e) => setProviderId(e.target.value)}>
               {providers.map((p) => (
@@ -235,6 +292,9 @@ function ModelForm({
         </Field>
         <Field label={t("上下文窗口")}>
           <input value={contextWindow} onChange={(e) => setContextWindow(e.target.value)} placeholder={t("如 128000")} />
+        </Field>
+        <Field label={t("最大输出")}>
+          <input value={maxOutput} onChange={(e) => setMaxOutput(e.target.value)} placeholder={t("如 16384")} />
         </Field>
       </div>
       <div className="field-row">
