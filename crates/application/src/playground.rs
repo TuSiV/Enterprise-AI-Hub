@@ -51,6 +51,7 @@ fn build_canonical(request: &PlaygroundRunRequest) -> Result<CanonicalChatReques
                 content: system.clone(),
                 tool_call_id: None,
                 name: None,
+                tool_calls: None,
             });
         }
     }
@@ -68,6 +69,7 @@ fn build_canonical(request: &PlaygroundRunRequest) -> Result<CanonicalChatReques
             content,
             tool_call_id: None,
             name: None,
+            tool_calls: None,
         });
     }
     if messages.is_empty() {

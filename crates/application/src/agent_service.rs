@@ -667,6 +667,7 @@ impl AgentService {
                 .to_string(),
             tool_call_id: None,
             name: None,
+            tool_calls: None,
         }];
         if let Some(system) = &version.system_prompt {
             messages.insert(
@@ -676,6 +677,7 @@ impl AgentService {
                     content: system.clone(),
                     tool_call_id: None,
                     name: None,
+                    tool_calls: None,
                 },
             );
         }
@@ -773,6 +775,7 @@ impl AgentService {
                 content: response.content.clone().unwrap_or_default(),
                 tool_call_id: None,
                 name: None,
+                tool_calls: None,
             });
             for call in &response.tool_calls {
                 tool_calls_count += 1;
@@ -844,6 +847,7 @@ impl AgentService {
                     },
                     tool_call_id: Some(call.id.clone()),
                     name: Some(call.name.clone()),
+                    tool_calls: None,
                 });
             }
         }

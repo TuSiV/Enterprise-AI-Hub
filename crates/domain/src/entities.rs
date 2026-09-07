@@ -81,11 +81,16 @@ pub struct Provider {
 }
 
 impl Provider {
-    /// OpenAI / Ollama / openai_compatible 全部复用 OpenAI-compatible Adapter。
+    /// OpenAI / Ollama / openai_compatible 默认复用 OpenAI-compatible Adapter；
+    /// config `{"api": "responses"}` 可切换到 OpenAI Responses API Adapter。
     pub fn adapter_protocol(&self) -> &'static str {
         match self.kind {
             ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => {
-                "openai_compatible"
+                if self.config.get("api").and_then(|v| v.as_str()) == Some("responses") {
+                    "openai_responses"
+                } else {
+                    "openai_compatible"
+                }
             }
             ProviderKind::Anthropic => "anthropic",
             ProviderKind::Gemini => "gemini",

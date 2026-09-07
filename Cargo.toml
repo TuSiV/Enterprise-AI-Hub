@@ -22,6 +22,9 @@ members = [
     "crates/domain",
     "crates/provider-core",
     "crates/provider-openai-compatible",
+    "crates/provider-openai-responses",
+    "crates/provider-anthropic",
+    "crates/provider-gemini",
     "crates/persistence",
     "crates/application",
     "crates/gateway",
@@ -44,6 +47,9 @@ aihub-secrets = { path = "crates/secrets" }
 aihub-domain = { path = "crates/domain" }
 aihub-provider-core = { path = "crates/provider-core" }
 aihub-provider-openai-compatible = { path = "crates/provider-openai-compatible" }
+aihub-provider-openai-responses = { path = "crates/provider-openai-responses" }
+aihub-provider-anthropic = { path = "crates/provider-anthropic" }
+aihub-provider-gemini = { path = "crates/provider-gemini" }
 aihub-persistence = { path = "crates/persistence" }
 aihub-application = { path = "crates/application" }
 aihub-gateway = { path = "crates/gateway" }

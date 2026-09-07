@@ -162,6 +162,16 @@ fn to_canonical(
             content: wire_content_to_text(&m.content),
             tool_call_id: m.tool_call_id.clone(),
             name: m.name.clone(),
+            tool_calls: m.tool_calls.as_ref().map(|calls| {
+                calls
+                    .iter()
+                    .map(|c| ToolCallOutput {
+                        id: c.id.clone().unwrap_or_default(),
+                        name: c.function.name.clone().unwrap_or_default(),
+                        arguments: c.function.arguments.clone().unwrap_or_default(),
+                    })
+                    .collect()
+            }),
         })
         .collect();
     let tools = request

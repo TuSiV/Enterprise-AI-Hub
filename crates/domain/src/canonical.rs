@@ -57,6 +57,9 @@ pub struct CanonicalMessage {
     pub tool_call_id: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
+    /// assistant 历史中的工具调用（多轮 agent 往返需要原样传回上游）。
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tool_calls: Option<Vec<ToolCallOutput>>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

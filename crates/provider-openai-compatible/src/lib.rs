@@ -192,6 +192,12 @@ impl OpenAICompatibleProvider {
                 if let Some(name) = &m.name {
                     obj["name"] = json!(name);
                 }
+                if let Some(calls) = &m.tool_calls {
+                    obj["tool_calls"] = json!(calls.iter().map(|c| json!({
+                        "id": c.id, "type": "function",
+                        "function": {"name": c.name, "arguments": c.arguments}
+                    })).collect::<Vec<_>>());
+                }
                 obj
             }).collect::<Vec<_>>(),
         });

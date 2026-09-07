@@ -116,13 +116,15 @@ impl ProviderService {
                 format!("unknown provider kind '{}'", request.kind),
             ));
         };
-        if !self.registry.supported_protocols().contains(&match kind {
+        let supported = self.registry.supported_protocols();
+        let protocols: &[&str] = match kind {
             ProviderKind::OpenAI | ProviderKind::OpenAICompatible | ProviderKind::Ollama => {
-                "openai_compatible"
+                &["openai_compatible", "openai_responses"]
             }
-            ProviderKind::Anthropic => "anthropic",
-            ProviderKind::Gemini => "gemini",
-        }) {
+            ProviderKind::Anthropic => &["anthropic"],
+            ProviderKind::Gemini => &["gemini"],
+        };
+        if !protocols.iter().any(|p| supported.contains(p)) {
             return Err(DomainError::validation(
                 DomainResource::Provider,
                 format!(

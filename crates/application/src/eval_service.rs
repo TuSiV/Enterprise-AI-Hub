@@ -143,6 +143,7 @@ impl EvalService {
                     content: system.clone(),
                     tool_call_id: None,
                     name: None,
+                    tool_calls: None,
                 });
             }
             // case.input: {question} 或 {messages:[...]} 或 字符串
@@ -157,6 +158,7 @@ impl EvalService {
                 content: question.to_string(),
                 tool_call_id: None,
                 name: None,
+                tool_calls: None,
             });
             if let Some(msgs) = case.input.get("messages").and_then(|v| v.as_array()) {
                 messages = msgs
@@ -169,6 +171,7 @@ impl EvalService {
                             content: m.get("content").and_then(|c| c.as_str())?.to_string(),
                             tool_call_id: None,
                             name: None,
+                            tool_calls: None,
                         })
                     })
                     .collect();
@@ -180,6 +183,7 @@ impl EvalService {
                             content: system.clone(),
                             tool_call_id: None,
                             name: None,
+                            tool_calls: None,
                         },
                     );
                 }
@@ -317,6 +321,7 @@ impl EvalService {
                 content: prompt,
                 tool_call_id: None,
                 name: None,
+                tool_calls: None,
             }],
             tools: Vec::new(),
             tool_choice: None,

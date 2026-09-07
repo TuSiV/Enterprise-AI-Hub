@@ -183,6 +183,7 @@ fn chat_request(stream: bool) -> CanonicalChatRequest {
             content: "hello".into(),
             tool_call_id: None,
             name: None,
+            tool_calls: None,
         }],
         tools: vec![],
         tool_choice: None,
@@ -225,6 +226,7 @@ async fn contract_system_message_forwarded() {
             content: "你是契约测试系统提示".into(),
             tool_call_id: None,
             name: None,
+            tool_calls: None,
         },
     );
     let response = provider(url, None, None, 10_000)

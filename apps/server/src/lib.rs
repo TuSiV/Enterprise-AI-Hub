@@ -41,7 +41,10 @@ use aihub_application::services::{
 use aihub_application::Repos;
 use aihub_config::Config;
 use aihub_provider_core::ProviderFactory;
+use aihub_provider_anthropic::AnthropicFactory;
+use aihub_provider_gemini::GeminiFactory;
 use aihub_provider_openai_compatible::OpenAICompatibleFactory;
+use aihub_provider_openai_responses::OpenAIResponsesFactory;
 use aihub_runtime_client::{RuntimeClient, RuntimeSupervisor};
 use axum::response::IntoResponse;
 use axum::routing::get;
@@ -248,7 +251,12 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         ])),
         _ => Arc::from(aihub_secrets::default_store()),
     };
-    let factories: Vec<Arc<dyn ProviderFactory>> = vec![Arc::new(OpenAICompatibleFactory)];
+    let factories: Vec<Arc<dyn ProviderFactory>> = vec![
+        Arc::new(OpenAICompatibleFactory),
+        Arc::new(OpenAIResponsesFactory),
+        Arc::new(AnthropicFactory),
+        Arc::new(GeminiFactory),
+    ];
     let registry = Arc::new(ProviderRegistry::new(
         factories,
         repos.providers.clone(),

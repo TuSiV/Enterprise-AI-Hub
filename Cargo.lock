@@ -143,6 +143,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "aihub-provider-anthropic"
+version = "0.1.0"
+dependencies = [
+ "aihub-domain",
+ "aihub-provider-core",
+ "aihub-secrets",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "futures",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "aihub-provider-core"
 version = "0.1.0"
 dependencies = [
@@ -154,6 +170,22 @@ dependencies = [
  "thiserror 2.0.20",
  "tokio",
  "tracing",
+]
+
+[[package]]
+name = "aihub-provider-gemini"
+version = "0.1.0"
+dependencies = [
+ "aihub-domain",
+ "aihub-provider-core",
+ "aihub-secrets",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "futures",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -173,6 +205,22 @@ dependencies = [
  "tokio",
  "tracing",
  "uuid",
+]
+
+[[package]]
+name = "aihub-provider-openai-responses"
+version = "0.1.0"
+dependencies = [
+ "aihub-domain",
+ "aihub-provider-core",
+ "aihub-secrets",
+ "async-stream",
+ "async-trait",
+ "axum",
+ "futures",
+ "reqwest 0.12.28",
+ "serde_json",
+ "tokio",
 ]
 
 [[package]]
@@ -212,8 +260,11 @@ dependencies = [
  "aihub-domain",
  "aihub-gateway",
  "aihub-persistence",
+ "aihub-provider-anthropic",
  "aihub-provider-core",
+ "aihub-provider-gemini",
  "aihub-provider-openai-compatible",
+ "aihub-provider-openai-responses",
  "aihub-runtime-client",
  "aihub-secrets",
  "aihub-telemetry",
