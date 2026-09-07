@@ -29,6 +29,7 @@ export default function Overview() {
   const [series, setSeries] = useState<TimeseriesPoint[]>([])
   const [byModel, setByModel] = useState<GroupUsage[]>([])
   const [byApp, setByApp] = useState<GroupUsage[]>([])
+  const [byUser, setByUser] = useState<GroupUsage[]>([])
   const [providers, setProviders] = useState<ProviderDto[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -42,13 +43,15 @@ export default function Overview() {
       api.get<TimeseriesPoint[]>('/api/v1/admin/usage/timeseries?bucket=day'),
       api.get<GroupUsage[]>('/api/v1/admin/usage/by-model'),
       api.get<GroupUsage[]>('/api/v1/admin/usage/by-application'),
+      api.get<GroupUsage[]>('/api/v1/admin/usage/by-user'),
       api.get<ProviderDto[]>('/api/v1/admin/providers'),
     ])
-      .then(([s, t, m, a, p]) => {
+      .then(([s, t, m, a, u, p]) => {
         setSummary(s)
         setSeries(t)
         setByModel(m)
         setByApp(a)
+        setByUser(u)
         setProviders(p)
       })
       .catch(e => setError(e.message))
@@ -127,6 +130,25 @@ export default function Overview() {
             </Table>
           ) : (
             <EmptyState title={t("暂无数据")} />
+          )}
+        </Card>
+      </div>
+
+      <div className="grid-2">
+        <Card title={t("按用户")}>
+          {byUser.length ? (
+            <Table head={[t("用户"), t("请求"), 'Tokens', t("成本")]}>
+              {byUser.map((g) => (
+                <tr key={g.group}>
+                  <td className="mono">{g.group}</td>
+                  <td>{g.requests}</td>
+                  <td>{formatTokens(g.totalTokens)}</td>
+                  <td>{formatCost(g.costMicrounits, summary.currency)}</td>
+                </tr>
+              ))}
+            </Table>
+          ) : (
+            <EmptyState title={t("暂无数据")} hint={t("调用时传 OpenAI user 字段或 X-AiHub-User 头即可按用户归因")} />
           )}
         </Card>
       </div>

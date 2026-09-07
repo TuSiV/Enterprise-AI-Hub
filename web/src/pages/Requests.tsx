@@ -78,11 +78,12 @@ export default function Requests() {
           <Spinner />
         ) : items.length ? (
           <>
-            <Table head={[t("时间"), t("应用"), t("请求模型"), t("实际模型"), 'Provider', t("状态"), t("延迟"), 'TTFT', 'Tokens', t("成本"), t("错误")]}>
+            <Table head={[t("时间"), t("应用"), t("用户"), t("请求模型"), t("实际模型"), 'Provider', t("状态"), t("延迟"), 'TTFT', 'Tokens', t("成本"), t("错误")]}>
               {items.map((r) => (
                 <tr key={r.id} className="clickable" onClick={() => openDetail(r.id)}>
                   <td className="dim">{formatTime(r.startedAt)}</td>
                   <td className="mono dim">{r.applicationKey ?? '-'}</td>
+                  <td className="mono dim">{r.userId ?? '-'}</td>
                   <td className="mono">{r.requestedModel}</td>
                   <td className="mono">{r.resolvedModelKey ?? '-'}</td>
                   <td className="mono dim">{r.providerKey ?? '-'}</td>

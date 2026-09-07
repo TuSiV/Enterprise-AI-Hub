@@ -111,6 +111,9 @@ pub struct ChatCompletionRequest {
     pub stream: Option<bool>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub stream_options: Option<StreamOptions>,
+    /// 终端用户标识（OpenAI 标准字段），记录到 ai_requests.user_id
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub user: Option<String>,
     /// reasoning effort 等 provider 特有参数原样透传
     #[serde(flatten)]
     pub extra: Value,

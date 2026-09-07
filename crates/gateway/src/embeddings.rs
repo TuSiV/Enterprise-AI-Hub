@@ -75,7 +75,7 @@ pub async fn execute_embeddings(
             id: request_id.clone(),
             trace_id: trace_id.clone(),
             application_id: Some(ctx.application.id.clone()),
-            user_id: None,
+            user_id: ctx.user_id.clone(),
             api_key_id: ctx.api_key_id.clone(),
             endpoint: "/v1/embeddings".to_string(),
             requested_model: request.model.clone(),

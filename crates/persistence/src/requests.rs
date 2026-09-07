@@ -571,6 +571,36 @@ impl UsageRepository for SqliteUsageRepository {
             .collect())
     }
 
+    async fn by_user(
+        &self,
+        query: &UsageQuery,
+    ) -> Result<Vec<(String, UsageAggregates)>, DomainError> {
+        let mut binds: Vec<String> = Vec::new();
+        let mut ts_binds: Vec<DateTime<Utc>> = Vec::new();
+        let mut sql = format!(
+            "SELECT COALESCE(r.user_id, 'anonymous') AS bucket, {}{}",
+            aggregates_select_clause(),
+            usage_join()
+        );
+        sql = apply_usage_query(sql, query, " WHERE 1=1", &mut binds, &mut ts_binds);
+        sql.push_str(" GROUP BY bucket ORDER BY requests DESC LIMIT 50");
+        let mut q = sqlx::query(&sql);
+        for b in &binds {
+            q = q.bind(b);
+        }
+        for ts in &ts_binds {
+            q = q.bind(ts_to_string(*ts));
+        }
+        let rows = q
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Request, e))?;
+        Ok(rows
+            .iter()
+            .map(|row| (row.get::<String, _>("bucket"), aggregates_from_row(row)))
+            .collect())
+    }
+
     async fn monthly_cost_for_application(
         &self,
         application_id: &str,

@@ -44,6 +44,8 @@ pub struct AuthContext {
     pub application: Application,
     pub api_key_id: Option<String>,
     pub actor_type: &'static str,
+    /// 终端用户标识：OpenAI `user` 字段或 `X-AiHub-User` 头（方案 §12：按用户归因）
+    pub user_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -243,6 +245,7 @@ impl ChatPipeline {
             application,
             api_key_id: Some(key.id),
             actor_type: "application",
+            user_id: None,
         })
     }
 
@@ -347,7 +350,7 @@ impl ChatPipeline {
             id: request_id.clone(),
             trace_id: trace_id.clone(),
             application_id: Some(ctx.application.id.clone()),
-            user_id: None,
+            user_id: ctx.user_id.clone(),
             api_key_id: ctx.api_key_id.clone(),
             endpoint: "/v1/chat/completions".to_string(),
             requested_model: request.model.clone(),

@@ -115,6 +115,7 @@ impl PlaygroundService {
             application,
             api_key_id: None,
             actor_type: "admin",
+            user_id: None,
         })
     }
 

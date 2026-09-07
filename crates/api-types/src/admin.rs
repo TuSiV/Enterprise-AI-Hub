@@ -410,6 +410,7 @@ pub struct RequestListItem {
     pub trace_id: Option<String>,
     pub application_id: Option<String>,
     pub application_key: Option<String>,
+    pub user_id: Option<String>,
     pub endpoint: String,
     pub requested_model: String,
     pub resolved_model_key: Option<String>,

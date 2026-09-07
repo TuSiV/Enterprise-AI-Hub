@@ -399,6 +399,30 @@ impl UsageRepository for PgUsageRepository {
             .collect())
     }
 
+    async fn by_user(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>> {
+        let mut sql = format!(
+            "SELECT COALESCE(r.user_id, 'anonymous') AS bucket, {AGG_SELECT}{USAGE_JOIN}"
+        );
+        let mut binds: Vec<String> = Vec::new();
+        if let Some(app) = &query.application_id {
+            sql.push_str(&format!(" WHERE r.application_id = ${}", binds.len() + 1));
+            binds.push(app.clone());
+        }
+        sql.push_str(" GROUP BY bucket ORDER BY requests DESC LIMIT 50");
+        let mut q = sqlx::query(&sql);
+        for b in &binds {
+            q = q.bind(b);
+        }
+        let rows = q
+            .fetch_all(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::Request, e))?;
+        Ok(rows
+            .iter()
+            .map(|row| (row.get::<String, _>("bucket"), agg_from_row(row)))
+            .collect())
+    }
+
     async fn monthly_cost_for_application(
         &self,
         application_id: &str,

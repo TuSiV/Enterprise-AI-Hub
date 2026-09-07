@@ -340,6 +340,7 @@ pub trait UsageRepository: Send + Sync {
     ) -> Result<Vec<(String, UsageAggregates)>>;
     async fn by_model(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>>;
     async fn by_application(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>>;
+    async fn by_user(&self, query: &UsageQuery) -> Result<Vec<(String, UsageAggregates)>>;
     async fn monthly_cost_for_application(
         &self,
         application_id: &str,

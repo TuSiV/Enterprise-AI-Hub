@@ -105,6 +105,7 @@ pub fn router(state: AppState) -> Router {
         .route("/v1/admin/usage/timeseries", get(usage_timeseries))
         .route("/v1/admin/usage/by-model", get(usage_by_model))
         .route("/v1/admin/usage/by-application", get(usage_by_application))
+        .route("/v1/admin/usage/by-user", get(usage_by_user))
         .route("/v1/admin/requests", get(requests_list))
         .route("/v1/admin/requests/{id}", get(requests_detail))
         .route("/v1/admin/audit", get(audit_list))
@@ -843,6 +844,31 @@ async fn usage_by_application(
     }
 }
 
+async fn usage_by_user(
+    State(state): State<AppState>,
+    Query(params): Query<UsageQueryParams>,
+) -> Result<Json<serde_json::Value>, Response> {
+    let from = parse_time(&params.from)?;
+    let to = parse_time(&params.to)?;
+    let query = aihub_domain::repos::UsageQuery {
+        application_id: params.application_id,
+        from,
+        to,
+    };
+    match state.repos.usage.by_user(&query).await {
+        Ok(rows) => Ok(Json(serde_json::json!({
+            "data": rows.into_iter().map(|(group, agg)| GroupUsage {
+                group,
+                requests: agg.requests,
+                total_tokens: agg.total_tokens,
+                cost_microunits: agg.cost_microunits,
+            }).collect::<Vec<_>>(),
+            "meta": {}
+        }))),
+        Err(e) => Err(domain_error_response(&e)),
+    }
+}
+
 async fn requests_list(
     State(state): State<AppState>,
     Query(params): Query<UsageQueryParams>,
@@ -1550,6 +1576,7 @@ async fn agent_run(
             .await
             .map_err(|e| domain_error_response(&e))?,
         api_key_id: None,
+        user_id: None,
         actor_type: "admin",
     };
     match state
@@ -1698,6 +1725,7 @@ async fn eval_run_create(
             .await
             .map_err(|e| domain_error_response(&e))?,
         api_key_id: None,
+        user_id: None,
         actor_type: "admin",
     };
     match state

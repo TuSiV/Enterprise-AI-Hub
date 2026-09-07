@@ -84,11 +84,27 @@ async fn authenticate(
             "missing Authorization: Bearer <application api key>",
         )));
     };
-    state
+    let mut ctx = state
         .pipeline
         .authenticate_key(&bearer)
         .await
-        .map_err(GatewayError)
+        .map_err(GatewayError)?;
+    ctx.user_id = sanitize_user_id(
+        headers
+            .get("x-aihub-user")
+            .and_then(|v| v.to_str().ok()),
+    );
+    Ok(ctx)
+}
+
+/// 终端用户归因（方案 §12）：优先请求体 OpenAI `user` 字段，其次 `X-AiHub-User` 头。
+/// 只做裁剪与长度限制，不做格式强校验，避免破坏上游已有调用方式。
+fn sanitize_user_id(value: Option<&str>) -> Option<String> {
+    let trimmed = value?.trim();
+    if trimmed.is_empty() {
+        return None;
+    }
+    Some(trimmed.chars().take(128).collect())
 }
 
 /// 扩展响应头（§11.4）
@@ -130,10 +146,13 @@ async fn chat_completions(
     headers: HeaderMap,
     Json(request): Json<wire::ChatCompletionRequest>,
 ) -> Response {
-    let ctx = match authenticate(&state, &headers).await {
+    let mut ctx = match authenticate(&state, &headers).await {
         Ok(ctx) => ctx,
         Err(e) => return e.into_response(),
     };
+    if request.user.is_some() {
+        ctx.user_id = sanitize_user_id(request.user.as_deref());
+    }
     let stream = request.is_stream();
     let model_name = request.model.clone();
     let canonical = to_canonical(&request, stream);

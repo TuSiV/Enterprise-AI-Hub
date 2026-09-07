@@ -168,6 +168,7 @@ export interface RequestListItem {
   traceId: string | null
   applicationId: string | null
   applicationKey: string | null
+  userId: string | null
   endpoint: string
   requestedModel: string
   resolvedModelKey: string | null
