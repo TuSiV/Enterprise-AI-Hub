@@ -1,0 +1,17 @@
+.git
+**/target
+**/node_modules
+**/dist
+docs
+data
+**/.env
+**/.env.*
+**/*.db
+**/*.db-*
+**/admin_token
+**/*.token
+**/*.tauri.key
+**/*.log
+**/.DS_Store
+**/__pycache__
+**/.venv

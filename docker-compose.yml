@@ -17,7 +17,7 @@ services:
   postgres:
     image: postgres:16
     environment:
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set a strong PostgreSQL password}
       POSTGRES_DB: aihub
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -26,13 +26,16 @@ services:
       interval: 5s
   aihub:
     build: .
+    restart: unless-stopped
     depends_on:
       postgres:
         condition: service_healthy
     environment:
       AIHUB_MODE: server
       AIHUB_DATA_DIR: /data
-      AIHUB_DATABASE_URL: postgres://postgres:postgres@postgres:5432/aihub
+      AIHUB_DATABASE_DRIVER: postgres
+      AIHUB_DATABASE_URL: ${AIHUB_DATABASE_URL:?Set the PostgreSQL URL with URL-encoded credentials}
+      AIHUB_CORS_ALLOWED_ORIGINS: ${AIHUB_CORS_ALLOWED_ORIGINS:-}
       AIHUB_SECRET_BACKEND: env
       AWS_ACCESS_KEY_ID: ""
       AWS_SECRET_ACCESS_KEY: ""

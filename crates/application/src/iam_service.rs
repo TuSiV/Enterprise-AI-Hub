@@ -23,6 +23,22 @@ use sha2::{Digest, Sha256};
 use std::sync::Arc;
 
 use crate::Repos;
+use argon2::password_hash::{rand_core::OsRng, SaltString};
+use argon2::{Argon2, PasswordHash, PasswordHasher, PasswordVerifier};
+use subtle::ConstantTimeEq;
+
+async fn password_digest(password: &str) -> Result<String, DomainError> {
+    let password = password.to_owned();
+    tokio::task::spawn_blocking(move || {
+        let salt = SaltString::generate(&mut OsRng);
+        Argon2::default()
+            .hash_password(password.as_bytes(), &salt)
+            .map(|hash| hash.to_string())
+            .map_err(|_| DomainError::internal(DomainResource::User, "password hashing failed"))
+    })
+    .await
+    .map_err(|_| DomainError::internal(DomainResource::User, "password task failed"))?
+}
 
 /// 系统角色（方案 §2.1 / 附录 C 权限矩阵）
 pub const SYSTEM_ROLES: &[(&str, &str, &[&str])] = &[
@@ -79,10 +95,17 @@ pub const SYSTEM_ROLES: &[(&str, &str, &[&str])] = &[
     ("end_user", "End User", &[]),
 ];
 
+const SESSION_TTL: std::time::Duration = std::time::Duration::from_secs(8 * 60 * 60);
+
+struct Session {
+    user_id: String,
+    expires_at: tokio::time::Instant,
+}
+
 pub struct IamService {
     repos: Repos,
     /// 内存 session store：token → user_id（重启失效，Server 模式可换 Redis Adapter）
-    sessions: Arc<tokio::sync::Mutex<std::collections::HashMap<String, String>>>,
+    sessions: Arc<tokio::sync::Mutex<std::collections::HashMap<String, Session>>>,
 }
 
 pub fn hash_password(password: &str, salt: &str) -> String {
@@ -123,10 +146,16 @@ impl IamService {
                 "username is required",
             ));
         }
-        let password_hash = password.map(|p| {
-            let salt = uuid::Uuid::new_v4().simple().to_string();
-            format!("{salt}${}", hash_password(p, &salt))
-        });
+        if !SYSTEM_ROLES.iter().any(|(key, _, _)| *key == role_key) {
+            return Err(DomainError::validation(
+                DomainResource::User,
+                "unknown role",
+            ));
+        }
+        let password_hash = match password {
+            Some(p) => Some(password_digest(p).await?),
+            None => None,
+        };
         let user = self
             .repos
             .users
@@ -164,6 +193,20 @@ impl IamService {
         let Some(stored) = &user.password_hash else {
             return false;
         };
+        if stored.starts_with("$argon2id$") {
+            let stored = stored.clone();
+            let password = password.to_owned();
+            return tokio::task::spawn_blocking(move || {
+                PasswordHash::new(&stored).ok().is_some_and(|hash| {
+                    Argon2::default()
+                        .verify_password(password.as_bytes(), &hash)
+                        .is_ok()
+                })
+            })
+            .await
+            .unwrap_or(false);
+        }
+        // Legacy SHA-256 records are upgraded after a successful login.
         let Some((salt, hash)) = stored.split_once('$') else {
             return false;
         };
@@ -188,27 +231,49 @@ impl IamService {
                 "invalid credentials",
             ));
         }
-        let token = format!("aih_session_{}", uuid::Uuid::new_v4().simple());
-        self.sessions
-            .lock()
-            .await
-            .insert(token.clone(), user.id.clone());
+        if user
+            .password_hash
+            .as_ref()
+            .is_some_and(|hash| !hash.starts_with("$argon2id$"))
+        {
+            let hash = password_digest(password).await?;
+            self.repos.users.set_password_hash(&user.id, &hash).await?;
+        }
+        let token = self.issue_session(&user).await;
         Ok((user, token))
     }
 
     pub async fn session_user(&self, token: &str) -> Option<User> {
-        let user_id = self.sessions.lock().await.get(token).cloned()?;
-        self.repos.users.get(&user_id).await.ok()
+        let user_id = {
+            let mut sessions = self.sessions.lock().await;
+            sessions.retain(|_, session| session.expires_at > tokio::time::Instant::now());
+            sessions.get(token)?.user_id.clone()
+        };
+        self.repos
+            .users
+            .get(&user_id)
+            .await
+            .ok()
+            .filter(|u| u.status == "active")
     }
 
     /// 为已验证身份签发 session（OIDC 登录端点使用）。
     pub async fn issue_session(&self, user: &User) -> String {
         let token = format!("aih_session_{}", uuid::Uuid::new_v4().simple());
-        self.sessions
-            .lock()
-            .await
-            .insert(token.clone(), user.id.clone());
+        let mut sessions = self.sessions.lock().await;
+        sessions.retain(|_, session| session.expires_at > tokio::time::Instant::now());
+        sessions.insert(
+            token.clone(),
+            Session {
+                user_id: user.id.clone(),
+                expires_at: tokio::time::Instant::now() + SESSION_TTL,
+            },
+        );
         token
+    }
+
+    pub async fn revoke_session(&self, token: &str) {
+        self.sessions.lock().await.remove(token);
     }
 
     pub async fn roles_of(&self, user_id: &str) -> Result<Vec<Role>, DomainError> {
@@ -316,14 +381,7 @@ impl IamService {
 }
 
 fn constant_time_eq(a: &str, b: &str) -> bool {
-    if a.len() != b.len() {
-        return false;
-    }
-    let mut diff = 0u8;
-    for (x, y) in a.bytes().zip(b.bytes()) {
-        diff |= x ^ y;
-    }
-    diff == 0
+    bool::from(a.as_bytes().ct_eq(b.as_bytes()))
 }
 
 /// 权限判定（静态角色表；自定义角色回退 role_permissions 查询由调用方使用 SQL）。
@@ -387,7 +445,7 @@ async fn verify_oidc_id_token(
     let decoding_key = DecodingKey::from_jwk(&jwk).map_err(|e| {
         DomainError::validation(DomainResource::User, format!("jwk decode failed: {e}"))
     })?;
-    let mut validation = Validation::new(header.alg);
+    let mut validation = Validation::new(jsonwebtoken::Algorithm::RS256);
     validation.set_issuer(&[expected_issuer]);
     validation.set_audience(&[expected_audience]);
     let data = decode::<serde_json::Value>(id_token, &decoding_key, &validation).map_err(|e| {

@@ -357,3 +357,19 @@ CLI：`aihub-server --config <toml> --mode <desktop|server> --port <n> --print-a
 ## 许可
 
 [Apache-2.0](LICENSE)
+
+### 安全配置与升级注意事项
+
+管理接口按现有系统角色权限校验，普通 `end_user` 默认没有管理权限。账号密码和 OIDC 登录入口不要求 Admin Token；MCP 服务配置涉及操作系统命令执行，要求 `security.manage`。Admin Token 保留完整管理权限，不能分发给普通用户。
+
+新密码使用 Argon2id；已有 SHA-256 密码在成功登录时自动升级，不需要数据库结构迁移。用户 session 有效期为 8 小时，调用 `POST /api/v1/auth/logout` 可注销当前 session；重启仍会使所有 session 失效。登录入口每个进程合计限制为每分钟 60 次，互联网部署应在反向代理增加按客户端的限流。
+
+浏览器 token 仅保留在页面内存，升级时会删除旧版本 localStorage 中的 token，刷新页面需要重新登录。桌面自动登录保留；CSP 同时应用于 HTTP 控制台和桌面配置。
+
+跨源访问默认关闭。开发服务器或连接另一台 AI Hub 时，在目标 AI Hub 设置 `AIHUB_CORS_ALLOWED_ORIGINS`，值为逗号分隔的精确来源（例如 `http://localhost:5173,https://console.example.com`），不能使用 `*`，也不要带路径或末尾 `/`。同源控制台不需要此配置。
+
+启用 `auth.trusted_header_user` 时，只允许可信反向代理连接后端；代理必须删除客户端传入的 `X-AIH-User-ID`，再注入经过认证的身份。新身份自动获得无管理权限的 `end_user` 角色，仍需授权。不要把后端端口直接暴露给不可信客户端。
+
+Docker Compose 启动前设置 `POSTGRES_PASSWORD` 和 `AIHUB_DATABASE_URL`。后者示例为 `postgres://postgres:<URL编码后的密码>@postgres:5432/aihub`；两处密码必须对应。配置可放在未跟踪的 `.env` 中，勿提交真实凭据。Compose 显式使用 PostgreSQL 驱动，镜像提供就绪健康检查。
+
+备份恢复只接受 `aihub.db` 和 `manifest.json` 两个普通文件，拒绝链接、额外或重复条目；manifest 上限 64 KiB、数据库上限 8 GiB。数据库完整性检查通过后才发布目标文件，已有目标不会被覆盖。

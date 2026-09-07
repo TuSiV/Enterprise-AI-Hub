@@ -488,6 +488,7 @@ pub trait UserRepository: Send + Sync {
     async fn get_by_subject(&self, provider: &str, subject: &str) -> Result<Option<User>>;
     async fn list(&self) -> Result<Vec<User>>;
     async fn set_status(&self, id: &str, status: &str) -> Result<()>;
+    async fn set_password_hash(&self, id: &str, hash: &str) -> Result<()>;
     async fn assign_role(&self, user_id: &str, role_key: &str) -> Result<()>;
     async fn roles_of(&self, user_id: &str) -> Result<Vec<Role>>;
     async fn ensure_role(

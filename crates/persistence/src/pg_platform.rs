@@ -836,6 +836,17 @@ impl UserRepository for PgUserRepository {
         Ok(())
     }
 
+    async fn set_password_hash(&self, id: &str, hash: &str) -> Result<()> {
+        sqlx::query("UPDATE users SET password_hash = $1, updated_at = $2 WHERE id = $3")
+            .bind(hash)
+            .bind(Utc::now())
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::User, e))?;
+        Ok(())
+    }
+
     async fn assign_role(&self, user_id: &str, role_key: &str) -> Result<()> {
         let role = sqlx::query("SELECT id FROM roles WHERE key = $1")
             .bind(role_key)

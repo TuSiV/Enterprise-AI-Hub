@@ -17,10 +17,11 @@
 
 use std::path::Path;
 
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use sqlx::sqlite::SqlitePoolOptions;
+use std::io::{Read, Seek, Write};
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct BackupManifest {
     pub app: String,
     pub schema_note: String,
@@ -32,9 +33,8 @@ pub async fn create_backup(db_path: &Path, output: &Path) -> anyhow::Result<()> 
     if let Some(parent) = output.parent() {
         std::fs::create_dir_all(parent)?;
     }
-    let workdir = std::env::temp_dir().join(format!("aihub-backup-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&workdir)?;
-    let snapshot = workdir.join("aihub.db");
+    let workdir = tempfile::Builder::new().prefix("aihub-backup-").tempdir()?;
+    let snapshot = workdir.path().join("aihub.db");
 
     // VACUUM INTO 产生一致快照，不阻塞运行中的实例。
     // 与运行实例保持 WAL 模式一致，避免打开遗留 -wal/-shm 的库时 SQLITE_CANTOPEN。
@@ -48,7 +48,8 @@ pub async fn create_backup(db_path: &Path, output: &Path) -> anyhow::Result<()> 
         .max_connections(1)
         .connect_with(options)
         .await?;
-    sqlx::query(&format!("VACUUM INTO '{}'", snapshot.display()))
+    sqlx::query("VACUUM INTO ?")
+        .bind(snapshot.to_string_lossy().as_ref())
         .execute(&pool)
         .await?;
     pool.close().await;
@@ -70,30 +71,88 @@ pub async fn create_backup(db_path: &Path, output: &Path) -> anyhow::Result<()> 
     builder.append_data(&mut header, "manifest.json", manifest_json.as_slice())?;
     builder.finish()?;
 
-    std::fs::remove_dir_all(&workdir)?;
     Ok(())
 }
 
+// Bound untrusted archives before allocating memory or writing database bytes.
+const MAX_DATABASE_BYTES: u64 = 8 * 1024 * 1024 * 1024;
+const MAX_MANIFEST_BYTES: u64 = 64 * 1024;
+
 pub async fn restore_backup(archive: &Path, db_path: &Path) -> anyhow::Result<()> {
-    if db_path.exists() {
-        anyhow::bail!(
-            "target database {} already exists; remove it (or move it aside) before restore",
-            db_path.display()
-        );
+    if db_path.symlink_metadata().is_ok() {
+        anyhow::bail!("target database {} already exists", db_path.display());
     }
-    if let Some(parent) = db_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    let workdir = std::env::temp_dir().join(format!("aihub-restore-{}", uuid::Uuid::new_v4()));
-    std::fs::create_dir_all(&workdir)?;
+    let parent = db_path
+        .parent()
+        .filter(|p| !p.as_os_str().is_empty())
+        .unwrap_or(Path::new("."));
+    std::fs::create_dir_all(parent)?;
+    // Same filesystem for atomic, no-clobber publication after validation.
+    let mut staged = tempfile::NamedTempFile::new_in(parent)?;
     let tarball = std::fs::File::open(archive)?;
-    tar::Archive::new(tarball).unpack(&workdir)?;
-    let restored = workdir.join("aihub.db");
-    if !restored.exists() {
-        std::fs::remove_dir_all(&workdir)?;
-        anyhow::bail!("archive does not contain aihub.db");
+    let mut tar = tar::Archive::new(tarball);
+    let mut seen_database = false;
+    let mut manifest = None;
+    for entry in tar.entries()? {
+        let mut entry = entry?;
+        anyhow::ensure!(
+            entry.header().entry_type().is_file(),
+            "backup entries must be regular files"
+        );
+        let name = entry.path_bytes().into_owned();
+        match name.as_slice() {
+            b"aihub.db" if !seen_database => {
+                anyhow::ensure!(
+                    entry.size() <= MAX_DATABASE_BYTES,
+                    "backup database exceeds 8 GiB"
+                );
+                std::io::copy(&mut entry, staged.as_file_mut())?;
+                seen_database = true;
+            }
+            b"manifest.json" if manifest.is_none() => {
+                anyhow::ensure!(
+                    entry.size() <= MAX_MANIFEST_BYTES,
+                    "backup manifest exceeds 64 KiB"
+                );
+                let mut bytes = Vec::new();
+                entry.read_to_end(&mut bytes)?;
+                let value: BackupManifest = serde_json::from_slice(&bytes)?;
+                anyhow::ensure!(
+                    value.app == "enterprise-ai-hub" && !value.secret_included,
+                    "unsupported backup manifest"
+                );
+                chrono::DateTime::parse_from_rfc3339(&value.created_at)?;
+                manifest = Some(value);
+            }
+            _ => anyhow::bail!("unexpected or duplicate backup entry"),
+        }
     }
-    std::fs::copy(&restored, db_path)?;
-    std::fs::remove_dir_all(&workdir)?;
+    anyhow::ensure!(
+        seen_database && manifest.is_some(),
+        "backup requires aihub.db and manifest.json"
+    );
+    staged.as_file_mut().flush()?;
+    staged.as_file().sync_all()?;
+    staged.as_file_mut().rewind()?;
+    let mut signature = [0u8; 16];
+    staged.as_file_mut().read_exact(&mut signature)?;
+    anyhow::ensure!(
+        &signature == b"SQLite format 3\0",
+        "backup is not a SQLite database"
+    );
+    let options = sqlx::sqlite::SqliteConnectOptions::new()
+        .filename(staged.path())
+        .read_only(true)
+        .create_if_missing(false);
+    let pool = SqlitePoolOptions::new()
+        .max_connections(1)
+        .connect_with(options)
+        .await?;
+    let checks = sqlx::query_scalar::<_, String>("PRAGMA quick_check")
+        .fetch_all(&pool)
+        .await;
+    pool.close().await;
+    anyhow::ensure!(checks? == ["ok"], "backup database integrity check failed");
+    staged.persist_noclobber(db_path)?;
     Ok(())
 }

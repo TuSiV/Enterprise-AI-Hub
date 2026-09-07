@@ -55,6 +55,8 @@ function Shell({ children }: { children: React.ReactNode }) {
     { label: '监控与管理', items: [['/requests', '请求', 'activity'], ['/audit', '审计', 'audit'], ['/security', '安全', 'shield'], ['/settings', '设置', 'settings']] },
   ]
   const logout = () => {
+    // Capture the credential before clearing local state.
+    void api.post('/api/v1/auth/logout').catch(() => {})
     clearToken()
     navigate('/login')
   }

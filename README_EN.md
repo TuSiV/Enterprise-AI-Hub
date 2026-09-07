@@ -279,7 +279,7 @@ cd web && npm run build                                 # TS type check + build
 ./scripts/smoke.sh                                      # process-level e2e smoke
 ```
 
-Coverage matrix: **Provider contract (11 cases, §31.3)** · gateway integration (auth / failover / streaming /
+Coverage matrix: **Provider contract (11 cases)** · gateway integration (auth / failover / streaming /
 rate limit / key revocation) · platform e2e (Prompt / KB / Agent / Eval / DLP / OIDC verification) ·
 RBAC multi-user & anti-forgery · concurrency & cancellation storm · SQLite/PostgreSQL dual-dialect contracts.
 
@@ -287,7 +287,7 @@ RBAC multi-user & anti-forgery · concurrency & cancellation storm · SQLite/Pos
 
 ## Configuration
 
-Priority: **CLI > env vars > config.toml > defaults** (plan §26)
+Priority: **CLI > env vars > config.toml > defaults**
 
 | Env var | Description | Default |
 |---|---|:---|
@@ -308,7 +308,7 @@ CLI: `aihub-server --config <toml> --mode <desktop|server> --port <n> --print-ad
 ## Project layout
 
 ```
-├── crates/                     # Rust Core (plan §7.1: domain has zero reverse dependencies)
+├── crates/                     # Rust Core (domain has zero reverse dependencies)
 │   ├── domain                  # entities / canonical protocol / repository ports / cost engine / pricing presets
 │   ├── application             # services + execution pipeline + RBAC + RAG + Agent + Eval
 │   ├── gateway                 # /v1 protocol adapter + SSE
@@ -334,3 +334,19 @@ CLI: `aihub-server --config <toml> --mode <desktop|server> --port <n> --print-ad
 ## License
 
 [Apache-2.0](LICENSE)
+
+### Security configuration and upgrade notes
+
+Admin routes enforce the existing system-role permissions. `end_user` has no management permissions. Password and OIDC login endpoints do not require an Admin Token. MCP server configuration requires `security.manage` because stdio commands execute with the server's OS privileges. Keep the full-access Admin Token restricted to administrators.
+
+New passwords use Argon2id; legacy SHA-256 records upgrade on successful login without a schema migration. User sessions expire after 8 hours and can be revoked through `POST /api/v1/auth/logout`. Restarting still invalidates all sessions. Login endpoints share a per-process limit of 60 requests per minute; public deployments should also enforce per-client limits at the reverse proxy.
+
+Browser tokens now live only in page memory. Old localStorage tokens are removed on upgrade, so refreshing requires login again. Desktop automatic login remains available. CSP covers both the HTTP console and the desktop configuration.
+
+Cross-origin browser access is disabled by default. Set `AIHUB_CORS_ALLOWED_ORIGINS` on the target server to comma-separated exact origins, for example `http://localhost:5173,https://console.example.com`. Wildcards, paths and trailing slashes are not accepted. Same-origin consoles need no setting.
+
+Enable `auth.trusted_header_user` only behind a trusted proxy that removes incoming `X-AIH-User-ID` and injects the authenticated identity. Restrict direct backend access. Newly provisioned users receive `end_user` and still require explicit authorization.
+
+Before running Docker Compose, set `POSTGRES_PASSWORD` and `AIHUB_DATABASE_URL`, for example `postgres://postgres:<URL-encoded-password>@postgres:5432/aihub`. Credentials must match. An untracked `.env` may supply these settings; never commit real credentials. Compose explicitly selects PostgreSQL, and the image provides a readiness health check.
+
+Restore accepts only regular `aihub.db` and `manifest.json` files, rejecting links, unexpected or duplicate entries. Limits are 8 GiB for the database and 64 KiB for the manifest. The database is published only after integrity validation, without overwriting an existing destination.

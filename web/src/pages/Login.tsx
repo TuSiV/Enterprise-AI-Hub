@@ -39,9 +39,9 @@ export default function Login() {
   const submit = async (value?: string) => {
     setLoading(true)
     setError('')
-    setServerUrl(serverUrl)
-    setToken(value ?? token)
     try {
+      setServerUrl(serverUrl)
+      setToken(value ?? token)
       await api.get<SystemInfo>('/api/v1/admin/config')
       navigate('/')
     } catch (e) {

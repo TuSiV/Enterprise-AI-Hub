@@ -2,20 +2,22 @@
 FROM node:22-slim AS web-builder
 WORKDIR /build/web
 COPY web/package.json web/package-lock.json* ./
-RUN npm install --registry=https://registry.npmmirror.com
+RUN npm ci --registry=https://registry.npmmirror.com
 COPY web/ ./
 RUN npm run build
 
 FROM rust:1.94-slim AS rust-builder
 WORKDIR /build
-COPY Cargo.toml Cargo.lock* .cargo/ ./
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libdbus-1-dev && rm -rf /var/lib/apt/lists/*
+COPY Cargo.toml Cargo.lock ./
+COPY .cargo/ .cargo/
 COPY crates/ crates/
 COPY apps/ apps/
 COPY runtime/ runtime/
 RUN cargo build --release -p aihub-server -p aihub-mock-openai
 
 FROM python:3.12-slim
-RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libdbus-1-3 && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=rust-builder /build/target/release/aihub-server /usr/local/bin/aihub-server
 COPY --from=rust-builder /build/target/release/aihub-mock-openai /usr/local/bin/aihub-mock-openai
@@ -24,7 +26,9 @@ RUN pip install --no-cache-dir -r runtime/requirements.txt pypdf python-docx
 COPY --from=web-builder /build/web/dist /app/web/dist
 ENV AIHUB_MODE=server \
     AIHUB_DATA_DIR=/data \
+    AIHUB_GATEWAY_HOST=0.0.0.0
 # Web dist 默认查找 ../web/dist 与 ./web/dist —— server 模式数据目录之外固定指向 /app/web/dist
 VOLUME ["/data"]
 EXPOSE 8787
+HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=3 CMD python -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8787/health/ready', timeout=3)"
 CMD ["aihub-server"]

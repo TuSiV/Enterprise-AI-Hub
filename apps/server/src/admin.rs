@@ -219,8 +219,6 @@ pub fn router(state: AppState) -> Router {
         )
         .route("/v1/admin/security/dlp/scan", post(dlp_scan))
         .route("/v1/admin/users", get(users_list).post(users_create))
-        .route("/v1/auth/login", post(auth_login))
-        .route("/v1/auth/oidc", post(auth_oidc))
         .route("/v1/admin/runtime/status", get(runtime_status))
         .route("/v1/admin/jobs", get(jobs_list))
         .route("/v1/admin/jobs/{id}/requeue", post(job_requeue))
@@ -228,7 +226,11 @@ pub fn router(state: AppState) -> Router {
             state.clone(),
             admin_auth,
         ));
-    authed.with_state(state)
+    authed
+        .route("/v1/auth/login", post(auth_login))
+        .route("/v1/auth/oidc", post(auth_oidc))
+        .route("/v1/auth/logout", post(auth_logout))
+        .with_state(state)
 }
 
 // ---------- 鉴权 ----------
@@ -238,56 +240,120 @@ async fn admin_auth(
     req: axum::extract::Request,
     next: Next,
 ) -> Response {
-    let from_bearer = req
-        .headers()
-        .get(axum::http::header::AUTHORIZATION)
-        .and_then(|v| v.to_str().ok())
-        .and_then(|v| v.strip_prefix("Bearer "))
-        .map(str::trim);
-    let from_header = req
-        .headers()
-        .get("x-aih-admin-token")
-        .and_then(|v| v.to_str().ok())
-        .map(str::trim);
-    // Trusted upstream（§11.3）：反向代理注入的 X-AIH-User-ID，仅在配置显式开启时生效
-    if state.config.auth.trusted_header_user {
-        if let Some(user_id) = req
+    use subtle::ConstantTimeEq;
+    let provided = request_token(req.headers());
+    if provided.is_some_and(|token| {
+        !state.admin_token.is_empty()
+            && bool::from(token.as_bytes().ct_eq(state.admin_token.as_bytes()))
+    }) {
+        return next.run(req).await;
+    }
+    let user = if let Some(token) = provided {
+        // An explicit invalid credential must not fall back to a trusted header.
+        state.iam.session_user(token).await
+    } else if state.config.auth.trusted_header_user {
+        match req
             .headers()
             .get("x-aih-user-id")
             .and_then(|v| v.to_str().ok())
         {
-            if state
-                .iam
-                .identity_from_trusted_header(user_id, user_id)
-                .await
-                .is_ok()
-            {
-                return next.run(req).await;
+            Some(id) if !id.trim().is_empty() => {
+                state.iam.identity_from_trusted_header(id, id).await.ok()
             }
+            _ => None,
         }
-    }
-    let provided = from_bearer.or(from_header);
-    // IAM session token（M10 RBAC）：aih_session_ 前缀走用户会话校验
-    let session_ok = match provided {
-        Some(token) if token.starts_with("aih_session_") => state
-            .iam
-            .session_user(token)
-            .await
-            .map(|u| u.status == "active")
-            .unwrap_or(false),
-        _ => false,
+    } else {
+        None
     };
-    if provided != Some(state.admin_token.as_str()) && !session_ok {
-        return (
+    let Some(user) = user.filter(|u| u.status == "active") else {
+        return auth_error(
             StatusCode::UNAUTHORIZED,
-            Json(ApiErrorBody::new(
-                "AIH_UNAUTHORIZED",
-                "invalid or missing admin token",
-            )),
-        )
-            .into_response();
+            "AIH_UNAUTHORIZED",
+            "invalid or missing credentials",
+        );
+    };
+    let route = req
+        .extensions()
+        .get::<axum::extract::MatchedPath>()
+        .map(|p| p.as_str())
+        .unwrap_or("");
+    let allowed = match required_permission(req.method(), route) {
+        Some(permission) => state.iam.has_permission(&user, permission).await,
+        None => false,
+    };
+    if !allowed {
+        return auth_error(
+            StatusCode::FORBIDDEN,
+            "AIH_FORBIDDEN",
+            "insufficient permissions",
+        );
     }
     next.run(req).await
+}
+
+fn request_token(headers: &HeaderMap) -> Option<&str> {
+    headers
+        .get(axum::http::header::AUTHORIZATION)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.strip_prefix("Bearer "))
+        .or_else(|| {
+            headers
+                .get("x-aih-admin-token")
+                .and_then(|v| v.to_str().ok())
+        })
+        .map(str::trim)
+}
+
+fn auth_error(status: StatusCode, code: &str, message: &str) -> Response {
+    (status, Json(ApiErrorBody::new(code, message))).into_response()
+}
+
+// Matched route templates, never user-supplied IDs; unknown routes fail closed.
+fn required_permission(method: &axum::http::Method, route: &str) -> Option<&'static str> {
+    let (_, path) = route.split_once("/v1/admin/")?;
+    let resource = path.split('/').next()?;
+    let read = method == axum::http::Method::GET || method == axum::http::Method::HEAD;
+    Some(match resource {
+        "config" | "usage" | "cost" | "requests" => "usage.read",
+        "audit" => "audit.read",
+        "providers" | "provider-presets" if read => "provider.read",
+        "providers" => "provider.write",
+        "models" | "pricing-presets" => "model.write",
+        "virtual-models" => "virtual_model.write",
+        "applications" if path.contains("/keys") => "api_key.create",
+        "applications" => "application.write",
+        "prompts" | "prompt-versions" => "prompt.write",
+        "knowledge-bases" | "documents" => "kb.write",
+        "agents" | "agent-versions" | "agent-runs" => "agent.write",
+        "tools" => "tool.register",
+        // stdio commands execute with the server's OS privileges.
+        "mcp-servers" | "security" | "runtime" | "jobs" => "security.manage",
+        "users" => "user.manage",
+        "evals" | "playground" => "eval.run",
+        _ => return None,
+    })
+}
+
+async fn check_login_rate(state: &AppState) -> Result<(), Response> {
+    if matches!(
+        state.limiter.check("auth:login", Some(60), None).await,
+        aihub_application::limiter::LimiterDecision::Allowed
+    ) {
+        Ok(())
+    } else {
+        Err(auth_error(
+            StatusCode::TOO_MANY_REQUESTS,
+            "AIH_RATE_LIMITED",
+            "too many login attempts",
+        ))
+    }
+}
+
+async fn auth_logout(State(state): State<AppState>, headers: HeaderMap) -> Json<Value> {
+    if let Some(token) = request_token(&headers) {
+        state.iam.revoke_session(token).await;
+    }
+    Json(json!({"data": {"loggedOut": true}, "meta": {}}))
 }
 
 // ---------- 错误映射 ----------
@@ -1935,6 +2001,7 @@ async fn auth_login(
     State(state): State<AppState>,
     Json(body): Json<SecurityBody>,
 ) -> Result<Json<serde_json::Value>, Response> {
+    check_login_rate(&state).await?;
     match state
         .iam
         .login(
@@ -2000,6 +2067,7 @@ async fn auth_oidc(
     State(state): State<AppState>,
     Json(body): Json<OidcLoginBody>,
 ) -> Result<Json<serde_json::Value>, Response> {
+    check_login_rate(&state).await?;
     let (Some(jwks), Some(issuer), Some(audience)) = (
         state.config.auth.oidc_jwks_url.as_ref(),
         state.config.auth.oidc_issuer.as_ref(),
@@ -2021,6 +2089,13 @@ async fn auth_oidc(
         .await
     {
         Ok(user) => {
+            if user.status != "active" {
+                return Err(auth_error(
+                    StatusCode::UNAUTHORIZED,
+                    "AIH_UNAUTHORIZED",
+                    "inactive user",
+                ));
+            }
             let token = state.iam.issue_session(&user).await;
             Ok(Json(
                 json!({ "data": {"token": token, "user": {"id": user.id, "username": user.username, "displayName": user.display_name}}, "meta": {} }),

@@ -16,9 +16,12 @@
 //! IdP JWKS 端点 + RS256 id_token → 验签 → subject 映射 + 自动建号 + end_user 角色。
 
 use aihub_config::{Config, GatewayConfig, Mode};
+use axum::body::Body;
+use axum::http::{Request, StatusCode};
 use axum::{Json, Router};
 use jsonwebtoken::{encode, Algorithm, EncodingKey, Header};
 use serde_json::{json, Value};
+use tower::ServiceExt;
 
 const TEST_PRIVATE_KEY_PEM: &str = r##"-----BEGIN PRIVATE KEY-----
 MIIEuwIBADANBgkqhkiG9w0BAQEFAASCBKUwggShAgEAAoIBAQCU2xbUYZ+vb9zu
@@ -77,6 +80,7 @@ async fn spawn_mock_jwks() -> String {
 
 #[tokio::test]
 async fn oidc_id_token_verifies_and_provisions_user() {
+    let jwks_url = spawn_mock_jwks().await + "/jwks.json";
     let core = {
         let dir = std::env::temp_dir().join(format!("aihub-oidc-{}", uuid::Uuid::new_v4()));
         let config = Config {
@@ -87,12 +91,18 @@ async fn oidc_id_token_verifies_and_provisions_user() {
                 port: 18790,
                 request_timeout_ms: 30_000,
             },
+            auth: aihub_config::AuthConfig {
+                secret_backend: Some("memory".into()),
+                oidc_jwks_url: Some(jwks_url.clone()),
+                oidc_issuer: Some("https://idp.example.com".into()),
+                oidc_audience: Some("aihub".into()),
+                ..Default::default()
+            },
             ..Default::default()
         };
         aihub_server::bootstrap(config).await.unwrap()
     };
 
-    let jwks_url = spawn_mock_jwks().await + "/jwks.json";
     let mut header = Header::new(Algorithm::RS256);
     header.kid = Some("test1".into());
     let token = encode(
@@ -119,6 +129,44 @@ async fn oidc_id_token_verifies_and_provisions_user() {
     assert_eq!(user.email.as_deref(), Some("e77@example.com"));
     let roles = core.state.iam.roles_of(&user.id).await.unwrap();
     assert!(roles.iter().any(|r| r.key == "end_user"));
+
+    // Public OIDC login needs no Admin Token, but does not grant admin permissions.
+    let login_request = || {
+        Request::builder()
+            .method("POST")
+            .uri("/api/v1/auth/oidc")
+            .header("content-type", "application/json")
+            .body(Body::from(json!({"idToken": token}).to_string()))
+            .unwrap()
+    };
+    let response = core.router.clone().oneshot(login_request()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = axum::body::to_bytes(response.into_body(), 8192)
+        .await
+        .unwrap();
+    let body: Value = serde_json::from_slice(&body).unwrap();
+    let session = body["data"]["token"].as_str().unwrap();
+    let response = core
+        .router
+        .clone()
+        .oneshot(
+            Request::builder()
+                .uri("/api/v1/admin/users")
+                .header("authorization", format!("Bearer {session}"))
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::FORBIDDEN);
+    core.state
+        .repos
+        .users
+        .set_status(&user.id, "disabled")
+        .await
+        .unwrap();
+    let response = core.router.clone().oneshot(login_request()).await.unwrap();
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
 
     // 错误 issuer 拒绝
     let err = core

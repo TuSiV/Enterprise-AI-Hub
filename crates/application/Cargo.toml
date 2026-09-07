@@ -24,6 +24,7 @@ aihub-provider-core.workspace = true
 aihub-runtime-client.workspace = true
 aihub-secrets.workspace = true
 async-trait.workspace = true
+argon2 = "0.5"
 chrono.workspace = true
 futures.workspace = true
 hex.workspace = true

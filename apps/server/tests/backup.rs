@@ -18,7 +18,7 @@ use aihub_persistence::open_sqlite;
 
 #[tokio::test]
 async fn backup_restore_roundtrip() {
-    let dir = std::env::temp_dir().join(format!("aihub-bk-test-{}", uuid::Uuid::new_v4()));
+    let dir = std::env::temp_dir().join(format!("aihub-bk-test-'{}", uuid::Uuid::new_v4()));
     std::fs::create_dir_all(&dir).unwrap();
     let db = dir.join("aihub.db");
 
@@ -53,4 +53,81 @@ async fn backup_restore_roundtrip() {
     let _ = pool.close().await;
     let _ = pool2.close().await;
     let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn append(builder: &mut tar::Builder<std::fs::File>, name: &str, bytes: &[u8]) {
+    let mut header = tar::Header::new_gnu();
+    header.set_size(bytes.len() as u64);
+    header.set_mode(0o600);
+    header.set_cksum();
+    builder.append_data(&mut header, name, bytes).unwrap();
+}
+
+#[tokio::test]
+async fn restore_rejects_links_missing_manifest_duplicates_and_invalid_database() {
+    for case in [
+        "symlink",
+        "hardlink",
+        "missing",
+        "duplicate",
+        "foreign",
+        "invalid-db",
+        "empty-db",
+        "unexpected",
+    ] {
+        let dir = tempfile::tempdir().unwrap();
+        let archive = dir.path().join("bad.tar");
+        let destination = dir.path().join("restored.db");
+        let mut builder = tar::Builder::new(std::fs::File::create(&archive).unwrap());
+        if case == "symlink" || case == "hardlink" {
+            let mut header = tar::Header::new_gnu();
+            header.set_entry_type(if case == "symlink" {
+                tar::EntryType::Symlink
+            } else {
+                tar::EntryType::Link
+            });
+            header.set_size(0);
+            header.set_mode(0o600);
+            builder
+                .append_link(&mut header, "aihub.db", "/etc/passwd")
+                .unwrap();
+        } else {
+            append(
+                &mut builder,
+                "aihub.db",
+                if case == "empty-db" {
+                    b""
+                } else {
+                    b"not a SQLite database"
+                },
+            );
+        }
+        if case == "duplicate" {
+            append(&mut builder, "aihub.db", b"duplicate");
+        }
+        if case == "unexpected" {
+            append(&mut builder, "other.txt", b"unexpected");
+        }
+        if case != "missing" {
+            let manifest = serde_json::json!({
+                "app": if case == "foreign" { "other-app" } else { "enterprise-ai-hub" },
+                "schema_note": "", "created_at": "2026-09-07T00:00:00Z", "secret_included": false
+            });
+            append(
+                &mut builder,
+                "manifest.json",
+                manifest.to_string().as_bytes(),
+            );
+        }
+        builder.finish().unwrap();
+        drop(builder);
+        let result = aihub_server::backup::restore_backup(&archive, &destination).await;
+        assert!(result.is_err(), "{case} must fail");
+        assert!(!destination.exists(), "{case} must not publish a database");
+        assert_eq!(
+            std::fs::read_dir(dir.path()).unwrap().count(),
+            1,
+            "temporary files must be removed: {case}"
+        );
+    }
 }

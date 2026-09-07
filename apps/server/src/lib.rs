@@ -392,7 +392,35 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         repos: state.repos.clone(),
     };
 
-    let cors = CorsLayer::permissive();
+    let origins = config
+        .auth
+        .cors_allowed_origins
+        .iter()
+        .map(|origin| {
+            let url = reqwest::Url::parse(origin)?;
+            anyhow::ensure!(
+                matches!(url.scheme(), "http" | "https")
+                    && url.origin().ascii_serialization() == *origin,
+                "CORS origins must be exact http(s) origins"
+            );
+            Ok(origin.parse::<axum::http::HeaderValue>()?)
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let cors = CorsLayer::new()
+        .allow_origin(origins)
+        .allow_methods([
+            axum::http::Method::GET,
+            axum::http::Method::HEAD,
+            axum::http::Method::POST,
+            axum::http::Method::PUT,
+            axum::http::Method::PATCH,
+            axum::http::Method::DELETE,
+        ])
+        .allow_headers([
+            axum::http::header::AUTHORIZATION,
+            axum::http::header::CONTENT_TYPE,
+            axum::http::HeaderName::from_static("x-aih-admin-token"),
+        ]);
     let base: Router<()> = Router::new()
         .route("/health/live", get(health_live))
         .route("/health/ready", get(health_ready))
@@ -414,6 +442,10 @@ pub async fn bootstrap(config: Config) -> anyhow::Result<Core> {
         None => router.fallback(get(api_root)),
     };
 
+    let router = router.layer(tower_http::set_header::SetResponseHeaderLayer::if_not_present(
+        axum::http::header::CONTENT_SECURITY_POLICY,
+        axum::http::HeaderValue::from_static("default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; connect-src 'self' http: https: ipc:; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"),
+    ));
     Ok(Core {
         state,
         router,

@@ -14,7 +14,7 @@
 
 import { t } from '../i18n'
 import { useEffect, useRef, useState } from 'react'
-import { api } from '../api/client'
+import { authenticatedFetch, api } from '../api/client'
 import type { VirtualModelDto, ModelDto, UsageSummary } from '../api/types'
 import { formatCost } from '../api/types'
 import { Button, Card, Field, Badge, Table } from '../components/ui'
@@ -111,10 +111,8 @@ export default function Playground() {
           costMicrounits: r.costMicrounits,
         })
       } else {
-        const token = localStorage.getItem('aihub_admin_token') ?? ''
-        const res = await fetch('/api/v1/admin/playground/stream', {
+        const res = await authenticatedFetch('/api/v1/admin/playground/stream', {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
           body: JSON.stringify(body),
         })
         if (!res.ok || !res.body) {

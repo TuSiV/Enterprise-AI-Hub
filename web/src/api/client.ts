@@ -14,6 +14,9 @@
 
 import { t } from '../i18n'
 const TOKEN_KEY = 'aihub_admin_token'
+// Credentials live only in this page; remove credentials persisted by older versions.
+localStorage.removeItem(TOKEN_KEY)
+let activeToken: string | null = null
 // Connected Desktop（§25）：workspace 支持本地与多个 Server；serverUrl 持久化
 const SERVER_URL_KEY = 'aihub_server_url'
 
@@ -23,21 +26,26 @@ export function getServerUrl(): string {
 
 export function setServerUrl(url: string) {
   if (url.trim()) {
-    localStorage.setItem(SERVER_URL_KEY, url.trim().replace(/\/$/, ''))
+    const parsed = new URL(url.trim())
+    if (!['http:', 'https:'].includes(parsed.protocol) || parsed.username || parsed.password || parsed.search || parsed.hash) {
+      throw new TypeError('Invalid server URL')
+    }
+    localStorage.setItem(SERVER_URL_KEY, parsed.href.replace(/\/$/, ''))
   } else {
     localStorage.removeItem(SERVER_URL_KEY)
   }
 }
 
 export function getToken(): string | null {
-  return localStorage.getItem(TOKEN_KEY)
+  return activeToken
 }
 
 export function setToken(token: string) {
-  localStorage.setItem(TOKEN_KEY, token)
+  activeToken = token || null
 }
 
 export function clearToken() {
+  activeToken = null
   localStorage.removeItem(TOKEN_KEY)
 }
 
@@ -52,14 +60,12 @@ export class ApiError extends Error {
   }
 }
 
-async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(init?.headers as Record<string, string>),
-  }
+/** Shared transport for JSON and streaming requests, including server selection and 401 handling. */
+export async function authenticatedFetch(path: string, init?: RequestInit): Promise<Response> {
+  const headers = new Headers(init?.headers)
+  if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-
+  if (token) headers.set('Authorization', `Bearer ${token}`)
   const base = getServerUrl()
   const res = await fetch(base ? `${base}${path}` : path, { ...init, headers })
   if (res.status === 401) {
@@ -67,35 +73,22 @@ async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
     window.dispatchEvent(new Event('aihub:unauthorized'))
     throw new ApiError(401, 'AIH_UNAUTHORIZED', t("未登录或 Admin Token 无效"))
   }
-  const body = await res.json().catch(() => ({}))
-  if (!res.ok) {
-    const err = body?.error ?? {}
-    throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? t("请求失败 ({0})", [res.status]))
-  }
-  return body?.data ?? body
+  return res
 }
 
-/** 返回完整 {data, meta} 信封（分页接口需要 meta.total）。 */
 async function requestEnvelope<T = any>(path: string, init?: RequestInit): Promise<{ data: T; meta?: any }> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(init?.headers as Record<string, string>),
-  }
-  const token = getToken()
-  if (token) headers['Authorization'] = `Bearer ${token}`
-  const base = getServerUrl()
-  const res = await fetch(base ? `${base}${path}` : path, { ...init, headers })
-  if (res.status === 401) {
-    clearToken()
-    window.dispatchEvent(new Event('aihub:unauthorized'))
-    throw new ApiError(401, 'AIH_UNAUTHORIZED', t("未登录或 Admin Token 无效"))
-  }
+  const res = await authenticatedFetch(path, init)
   const body = await res.json().catch(() => ({}))
   if (!res.ok) {
     const err = body?.error ?? {}
     throw new ApiError(res.status, err.code ?? 'UNKNOWN', err.message ?? t("请求失败 ({0})", [res.status]))
   }
   return body
+}
+
+async function request<T = any>(path: string, init?: RequestInit): Promise<T> {
+  const body = await requestEnvelope<T>(path, init)
+  return body?.data ?? body as T
 }
 
 export const api = {

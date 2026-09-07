@@ -10,6 +10,9 @@ on:
       - "runtime/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
       - ".github/workflows/ci.yml"
   pull_request:
     paths:
@@ -19,6 +22,9 @@ on:
       - "runtime/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
       - ".github/workflows/ci.yml"
 
 env:
@@ -93,5 +99,7 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - run: npm ci
+      - name: API transport regression tests
+        run: npm test
       - name: Typecheck + Build
         run: npm run build

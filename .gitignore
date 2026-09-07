@@ -1,4 +1,4 @@
-/target
+target/
 node_modules/
 web/dist/
 *.db
@@ -14,3 +14,11 @@ __pycache__/
 admin_token
 *.token
 docs/
+
+.env
+.env.*
+!.env.example
+*.tsbuildinfo
+*.log
+*.tauri.key
+aihub-tauri.key

@@ -13,6 +13,9 @@ on:
       - "runtime/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
       - ".github/workflows/ci-windows.yml"
   pull_request:
     paths:
@@ -20,6 +23,9 @@ on:
       - "apps/**"
       - "Cargo.toml"
       - "Cargo.lock"
+      - "Dockerfile"
+      - "docker-compose.yml"
+      - ".dockerignore"
       - ".github/workflows/ci-windows.yml"
 
 env:

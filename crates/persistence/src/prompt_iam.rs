@@ -330,6 +330,17 @@ impl UserRepository for SqliteUserRepository {
         Ok(())
     }
 
+    async fn set_password_hash(&self, id: &str, hash: &str) -> Result<(), DomainError> {
+        sqlx::query("UPDATE users SET password_hash = ?, updated_at = ? WHERE id = ?")
+            .bind(hash)
+            .bind(now_rfc3339())
+            .bind(id)
+            .execute(&self.pool)
+            .await
+            .map_err(|e| db_error(DomainResource::User, e))?;
+        Ok(())
+    }
+
     async fn assign_role(&self, user_id: &str, role_key: &str) -> Result<(), DomainError> {
         let role = sqlx::query("SELECT id FROM roles WHERE key = ?")
             .bind(role_key)

@@ -129,6 +129,8 @@ pub struct AuthConfig {
     /// 固定 admin token；未设置时首次启动生成并写入 data dir 的 admin_token 文件。
     pub admin_token: Option<String>,
     pub trusted_header_user: bool,
+    /// Exact browser origins allowed to call this server; empty means same-origin only.
+    pub cors_allowed_origins: Vec<String>,
     /// SecretStore 后端：keyring（默认，OS 钥匙串）| memory | env。
     /// 开发/CI 环境建议 memory，避免 macOS 钥匙串授权弹窗。
     pub secret_backend: Option<String>,
@@ -215,6 +217,9 @@ impl Config {
                 };
             }
         }
+        if let Ok(v) = std::env::var("AIHUB_DATABASE_DRIVER") {
+            self.database.driver = v;
+        }
         if let Ok(v) = std::env::var("AIHUB_DATABASE_URL") {
             self.database.url = Some(v);
         }
@@ -244,6 +249,14 @@ impl Config {
         }
         if let Ok(v) = std::env::var("AIHUB_SECRET_BACKEND") {
             self.auth.secret_backend = Some(v);
+        }
+        if let Ok(v) = std::env::var("AIHUB_CORS_ALLOWED_ORIGINS") {
+            self.auth.cors_allowed_origins = v
+                .split(',')
+                .map(str::trim)
+                .filter(|origin| !origin.is_empty())
+                .map(str::to_owned)
+                .collect();
         }
         if let Ok(v) = std::env::var("AIHUB_OIDC_JWKS_URL") {
             self.auth.oidc_jwks_url = Some(v);
